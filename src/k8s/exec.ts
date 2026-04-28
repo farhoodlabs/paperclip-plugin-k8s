@@ -1,6 +1,6 @@
 import { Exec } from "@kubernetes/client-node";
 import type { V1Status } from "@kubernetes/client-node";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import type { K8sDriverConfig } from "../config.js";
 import type { K8sClient } from "./client.js";
 import { podName } from "./pod.js";
@@ -21,11 +21,18 @@ export interface ExecOptions {
   timeoutMs: number;
 }
 
+// Below this stdin size, embed the bytes inside the shell command so the WebSocket
+// stays open after stdin EOF and stdout can flow back. Above it, embedding would
+// blow ARG_MAX (typically 128KB), so we fall back to streaming stdin through the
+// WebSocket and accept that @kubernetes/client-node closes the socket on stdin
+// EOF — fine for commands like `base64 -d > file` that don't need stdout.
+const STDIN_EMBED_MAX = 32 * 1024;
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
-function buildExecCommand(options: ExecOptions): string[] {
+function buildExecCommand(options: ExecOptions, embedStdin: boolean): string[] {
   const parts: string[] = [];
   if (options.cwd) parts.push(`cd ${shellQuote(options.cwd)}`);
   if (options.env) {
@@ -34,10 +41,7 @@ function buildExecCommand(options: ExecOptions): string[] {
     }
   }
   const execLine = [options.command, ...options.args].map(shellQuote).join(" ");
-  if (options.stdin != null) {
-    // Embed stdin as base64 in the shell command so we never pass a stdin stream to
-    // @kubernetes/client-node — that library calls ws.close() on stdin EOF, which
-    // kills the WebSocket before the process can write any stdout.
+  if (embedStdin && options.stdin != null) {
     const encoded = Buffer.from(options.stdin, "utf8").toString("base64");
     parts.push(`printf '%s' ${shellQuote(encoded)} | base64 -d | exec ${execLine}`);
   } else {
@@ -56,6 +60,13 @@ function extractExitCode(status: V1Status): number | null {
   return 1;
 }
 
+function stdinReadable(input: string): Readable {
+  const r = new Readable({ read() {} });
+  r.push(input);
+  r.push(null);
+  return r;
+}
+
 export async function execInPod(
   client: K8sClient,
   config: K8sDriverConfig,
@@ -64,7 +75,9 @@ export async function execInPod(
 ): Promise<ExecResult> {
   const exec = new Exec(client.kc);
   const name = podName(leaseId);
-  const command = buildExecCommand(options);
+  const embedStdin = options.stdin != null && options.stdin.length <= STDIN_EMBED_MAX;
+  const command = buildExecCommand(options, embedStdin);
+  const wsStdin = !embedStdin && options.stdin != null ? stdinReadable(options.stdin) : null;
 
   const stdoutChunks: Buffer[] = [];
   const stderrChunks: Buffer[] = [];
@@ -100,7 +113,7 @@ export async function execInPod(
         command,
         stdoutStream,
         stderrStream,
-        null, // stdin is embedded in the command; passing a stream would cause early ws.close()
+        wsStdin,
         false,
         (status: V1Status) => {
           pendingExitCode = extractExitCode(status);
