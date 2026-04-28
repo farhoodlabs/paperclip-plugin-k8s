@@ -40,9 +40,9 @@ export function buildPodManifest(
         ...(config.runAsGroup != null ? { runAsGroup: config.runAsGroup } : {}),
         ...(config.fsGroup != null ? { fsGroup: config.fsGroup } : {}),
       },
-      // Run as root just for this init step so we can chown the workspace mount.
-      // K8s' fsGroup only sets the GID; tar -xf needs the runAsUser to OWN the dir
-      // (utime/chmod on extracted entries fail otherwise).
+      // Chown ONLY the mount point so tar -xf can utime/chmod it. Files inside
+      // are created by the main container as runAsUser already; recursing here
+      // would be O(filesInPVC) and hurt acquireLease latency.
       initContainers:
         config.runAsUser != null
           ? [
@@ -52,7 +52,7 @@ export function buildPodManifest(
                 command: [
                   "/bin/sh",
                   "-c",
-                  `chown -R ${config.runAsUser}:${config.runAsGroup ?? config.runAsUser} ${config.workspaceMountPath}`,
+                  `chown ${config.runAsUser}:${config.runAsGroup ?? config.runAsUser} ${config.workspaceMountPath}`,
                 ],
                 securityContext: { runAsUser: 0, runAsGroup: 0 },
                 volumeMounts,

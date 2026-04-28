@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working agreement: verify every action
+
+Do not assume any action you take has succeeded. Verify it with the actual outcome, every single time. This applies to:
+
+- **Every git push.** After `git push`, confirm the commit/tag is on the remote (`git ls-remote --tags origin`, or fetch and diff). Don't claim "pushed" until you've seen it land.
+- **Every CI/workflow run.** After a tag triggers a workflow, watch the run (`gh run watch` / `gh run list`) until it completes. Report the actual conclusion, not the assumption that it'll succeed.
+- **Every npm publish.** After CI claims publish, verify with `npm view <pkg> version` and `npm view <pkg> dist-tags`. Account for CDN propagation lag — if the user reinstalls and the host pulls an older version, that's on you to flag.
+- **Every code change.** Run typecheck and tests after edits. Don't ship an "it should work" diff.
+- **Every K8s/runtime change.** When something deploys, tail logs or `kubectl describe` until you see the new behavior in real output. Don't infer success from the absence of an error message.
+
+If a step has a verification command, you run it. If verification fails or is ambiguous, say so explicitly — never paper over it. "I pushed and it should be on npm now" is not acceptable. "v0.1.X is on npm and tagged latest, confirmed via `npm view`" is.
+
+When the user is watching live (e.g. tailing pod logs), match their tempo: small, fully-verified steps over big batches of unverified work.
+
 ## Commands
 
 ```bash
