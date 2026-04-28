@@ -182,7 +182,7 @@ const plugin = definePlugin({
     const config = parseDriverConfig(params.config);
     const client = buildClient(config);
     try {
-      const result = await execInPod(client, config, params.lease.providerLeaseId, {
+      return await execInPod(client, config, params.lease.providerLeaseId, {
         command: params.command,
         args: params.args ?? [],
         cwd: params.cwd,
@@ -190,19 +190,6 @@ const plugin = definePlugin({
         stdin: params.stdin ?? undefined,
         timeoutMs: params.timeoutMs ?? config.execTimeoutMs,
       });
-      // DEBUG: remove before release
-      console.error("[k8s-plugin] exec", JSON.stringify({
-        command: params.command,
-        args: params.args,
-        cwd: params.cwd,
-        envKeys: Object.keys(params.env ?? {}),
-        stdinLen: params.stdin?.length ?? 0,
-        exitCode: result.exitCode,
-        stdoutLen: result.stdout.length,
-        stdoutHead: result.stdout.slice(0, 300),
-        stderrHead: result.stderr.slice(0, 300),
-      }));
-      return result;
     } catch (error) {
       throw new Error(`K8s exec failed: ${k8sErrorMessage(error)}`);
     }

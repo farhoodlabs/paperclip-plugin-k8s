@@ -1,6 +1,6 @@
 import { Exec } from "@kubernetes/client-node";
 import type { V1Status } from "@kubernetes/client-node";
-import { PassThrough, Readable } from "node:stream";
+import { PassThrough } from "node:stream";
 import type { K8sDriverConfig } from "../config.js";
 import type { K8sClient } from "./client.js";
 import { podName } from "./pod.js";
@@ -34,7 +34,15 @@ function buildExecCommand(options: ExecOptions): string[] {
     }
   }
   const execLine = [options.command, ...options.args].map(shellQuote).join(" ");
-  parts.push(`exec ${execLine}`);
+  if (options.stdin != null) {
+    // Embed stdin as base64 in the shell command so we never pass a stdin stream to
+    // @kubernetes/client-node — that library calls ws.close() on stdin EOF, which
+    // kills the WebSocket before the process can write any stdout.
+    const encoded = Buffer.from(options.stdin, "utf8").toString("base64");
+    parts.push(`printf '%s' ${shellQuote(encoded)} | base64 -d | exec ${execLine}`);
+  } else {
+    parts.push(`exec ${execLine}`);
+  }
   return ["/bin/sh", "-c", parts.join("; ")];
 }
 
@@ -48,13 +56,6 @@ function extractExitCode(status: V1Status): number | null {
   return 1;
 }
 
-function stdinReadable(input: string): Readable {
-  const r = new Readable({ read() {} });
-  r.push(input);
-  r.push(null);
-  return r;
-}
-
 export async function execInPod(
   client: K8sClient,
   config: K8sDriverConfig,
@@ -64,14 +65,13 @@ export async function execInPod(
   const exec = new Exec(client.kc);
   const name = podName(leaseId);
   const command = buildExecCommand(options);
-  const stdin = options.stdin != null ? stdinReadable(options.stdin) : null;
 
   const stdoutChunks: Buffer[] = [];
   const stderrChunks: Buffer[] = [];
   const stdoutStream = new PassThrough();
   const stderrStream = new PassThrough();
-  stdoutStream.on("data", (chunk: Buffer) => { stdoutChunks.push(chunk); process.stderr.write(`[k8s-exec] stdout chunk ${chunk.length}b\n`); });
-  stderrStream.on("data", (chunk: Buffer) => { stderrChunks.push(chunk); process.stderr.write(`[k8s-exec] stderr chunk ${chunk.length}b\n`); });
+  stdoutStream.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+  stderrStream.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
   let ws: { close(): void; on(event: string, handler: (...args: unknown[]) => void): void } | undefined;
 
@@ -82,7 +82,6 @@ export async function execInPod(
 
   const statusPromise = new Promise<ExecResult>((resolve, reject) => {
     let settled = false;
-    // undefined = Status frame not yet received; null/number = exit code from K8s Status frame.
     let pendingExitCode: number | null | undefined = undefined;
 
     const settle = (result: ExecResult) => {
@@ -101,11 +100,9 @@ export async function execInPod(
         command,
         stdoutStream,
         stderrStream,
-        stdin,
+        null, // stdin is embedded in the command; passing a stream would cause early ws.close()
         false,
         (status: V1Status) => {
-          // Store exit code but don't settle yet — stdout data may still be in transit.
-          // We wait for the WebSocket close event to collect all output first.
           pendingExitCode = extractExitCode(status);
         },
       )
@@ -117,11 +114,8 @@ export async function execInPod(
         socket.on("close", (code: unknown) => {
           const { stdout, stderr } = collectOutput();
           if (pendingExitCode !== undefined) {
-            // Status frame arrived before close — use its exit code now that output is complete.
             settle({ exitCode: pendingExitCode, timedOut: false, stdout, stderr });
           } else {
-            // No Status frame — @kubernetes/client-node closed the socket on stdin EOF
-            // (web-socket-handler.js) before K8s could deliver it. Infer from close code.
             const inferredExit = code === 1000 && !stderr.trim() ? 0 : 1;
             settle({ exitCode: inferredExit, timedOut: false, stdout, stderr });
           }
