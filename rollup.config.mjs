@@ -8,6 +8,7 @@ function withPlugins(config) {
   if (!config) return null;
   return {
     ...config,
+    external: [...(config.external ?? []), "@kubernetes/client-node"],
     plugins: [
       nodeResolve({ extensions: [".ts", ".js", ".mjs"] }),
       typescript({ tsconfig: "./tsconfig.json", declaration: false, declarationMap: false }),

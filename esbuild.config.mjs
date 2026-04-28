@@ -4,7 +4,14 @@ import { createPluginBundlerPresets } from "@paperclipai/plugin-sdk/bundlers";
 const presets = createPluginBundlerPresets();
 const watch = process.argv.includes("--watch");
 
-const workerCtx = await esbuild.context(presets.esbuild.worker);
+// @kubernetes/client-node is CJS with dynamic require() calls for Node builtins
+// that cannot be statically inlined into an ESM bundle — keep it external.
+const workerConfig = {
+  ...presets.esbuild.worker,
+  external: [...(presets.esbuild.worker.external ?? []), "@kubernetes/client-node"],
+};
+
+const workerCtx = await esbuild.context(workerConfig);
 const manifestCtx = await esbuild.context(presets.esbuild.manifest);
 
 if (watch) {
