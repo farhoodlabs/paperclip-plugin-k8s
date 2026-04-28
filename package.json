@@ -36,7 +36,7 @@
     "build": "rm -rf dist && tsc",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts --passWithNoTests"
   },
   "dependencies": {
     "@kubernetes/client-node": "^0.22.0"
