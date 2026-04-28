@@ -82,6 +82,9 @@ export async function execInPod(
 
   const statusPromise = new Promise<ExecResult>((resolve, reject) => {
     let settled = false;
+    // undefined = Status frame not yet received; null/number = exit code from K8s Status frame.
+    let pendingExitCode: number | null | undefined = undefined;
+
     const settle = (result: ExecResult) => {
       if (settled) return;
       settled = true;
@@ -101,7 +104,9 @@ export async function execInPod(
         stdin,
         false,
         (status: V1Status) => {
-          settle({ exitCode: extractExitCode(status), timedOut: false, ...collectOutput() });
+          // Store exit code but don't settle yet — stdout data may still be in transit.
+          // We wait for the WebSocket close event to collect all output first.
+          pendingExitCode = extractExitCode(status);
         },
       )
       .then((socket) => {
@@ -109,12 +114,17 @@ export async function execInPod(
         socket.on("error", (err: unknown) => {
           if (!settled) reject(err instanceof Error ? err : new Error(String(err)));
         });
-        // @kubernetes/client-node closes the WebSocket when stdin ends (web-socket-handler.js),
-        // preventing K8s from sending a Status frame. Infer success from close code + stderr.
         socket.on("close", (code: unknown) => {
           const { stdout, stderr } = collectOutput();
-          const inferredExit = code === 1000 && !stderr.trim() ? 0 : 1;
-          settle({ exitCode: inferredExit, timedOut: false, stdout, stderr });
+          if (pendingExitCode !== undefined) {
+            // Status frame arrived before close — use its exit code now that output is complete.
+            settle({ exitCode: pendingExitCode, timedOut: false, stdout, stderr });
+          } else {
+            // No Status frame — @kubernetes/client-node closed the socket on stdin EOF
+            // (web-socket-handler.js) before K8s could deliver it. Infer from close code.
+            const inferredExit = code === 1000 && !stderr.trim() ? 0 : 1;
+            settle({ exitCode: inferredExit, timedOut: false, stdout, stderr });
+          }
         });
       })
       .catch(reject);
