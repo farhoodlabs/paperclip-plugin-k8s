@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.12";
+const PLUGIN_VERSION = "0.1.13";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -71,6 +71,21 @@ const manifest: PaperclipPluginManifestV1 = {
             type: "object",
             description: "Environment variables to set on the pod container.",
             additionalProperties: { type: "string" },
+          },
+          runAsUser: {
+            type: "number",
+            description: "UID for the pod's containers. Defaults to 1000 (the `node` user in the Paperclip image).",
+            default: 1000,
+          },
+          runAsGroup: {
+            type: "number",
+            description: "GID for the pod's containers. Defaults to 1000.",
+            default: 1000,
+          },
+          fsGroup: {
+            type: "number",
+            description: "fsGroup applied to mounted volumes so the runAsUser can write. Defaults to 1000.",
+            default: 1000,
           },
         },
         required: ["image"],

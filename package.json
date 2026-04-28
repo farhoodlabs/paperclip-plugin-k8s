@@ -1,6 +1,6 @@
 {
   "name": "@farhoodlabs/paperclip-plugin-k8s",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Kubernetes sandbox provider plugin for Paperclip environments",
   "license": "MIT",
   "type": "module",

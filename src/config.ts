@@ -9,6 +9,9 @@ export interface K8sDriverConfig {
   podReadyTimeoutMs: number;
   execTimeoutMs: number;
   env: Record<string, string>;
+  runAsUser: number | null;
+  runAsGroup: number | null;
+  fsGroup: number | null;
 }
 
 // Resolves {companyId} placeholder in serviceAccountName.
@@ -26,6 +29,12 @@ function asTrimmedString(value: unknown): string | null {
 function asPositiveInt(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
+}
+
+function asNonNegativeIntOrNull(value: unknown): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
 }
 
 function asStringMap(value: unknown): Record<string, string> {
@@ -53,5 +62,8 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     podReadyTimeoutMs: asPositiveInt(raw.podReadyTimeoutMs, 120_000),
     execTimeoutMs: asPositiveInt(raw.execTimeoutMs, 300_000),
     env: asStringMap(raw.env),
+    runAsUser: asNonNegativeIntOrNull(raw.runAsUser ?? 1000),
+    runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),
+    fsGroup: asNonNegativeIntOrNull(raw.fsGroup ?? 1000),
   };
 }

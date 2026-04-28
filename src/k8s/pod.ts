@@ -35,6 +35,11 @@ export function buildPodManifest(
     spec: {
       restartPolicy: "Never",
       serviceAccountName: resolveServiceAccountName(config, companyId) ?? undefined,
+      securityContext: {
+        ...(config.runAsUser != null ? { runAsUser: config.runAsUser } : {}),
+        ...(config.runAsGroup != null ? { runAsGroup: config.runAsGroup } : {}),
+        ...(config.fsGroup != null ? { fsGroup: config.fsGroup } : {}),
+      },
       containers: [
         {
           name: "agent",
