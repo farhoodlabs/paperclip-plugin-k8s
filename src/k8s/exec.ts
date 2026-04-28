@@ -73,7 +73,7 @@ export async function execInPod(
   stdoutStream.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
   stderrStream.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
-  let ws: { close(): void; on(event: string, handler: (err: Error) => void): void } | undefined;
+  let ws: { close(): void; on(event: string, handler: (...args: unknown[]) => void): void } | undefined;
 
   const collectOutput = (): Pick<ExecResult, "stdout" | "stderr"> => ({
     stdout: Buffer.concat(stdoutChunks).toString("utf8"),
@@ -81,6 +81,15 @@ export async function execInPod(
   });
 
   const statusPromise = new Promise<ExecResult>((resolve, reject) => {
+    let settled = false;
+    const settle = (result: ExecResult) => {
+      if (settled) return;
+      settled = true;
+      stdoutStream.end();
+      stderrStream.end();
+      resolve(result);
+    };
+
     exec
       .exec(
         config.namespace,
@@ -92,15 +101,19 @@ export async function execInPod(
         stdin,
         false,
         (status: V1Status) => {
-          stdoutStream.end();
-          stderrStream.end();
-          resolve({ exitCode: extractExitCode(status), timedOut: false, ...collectOutput() });
+          settle({ exitCode: extractExitCode(status), timedOut: false, ...collectOutput() });
         },
       )
       .then((socket) => {
         ws = socket;
-        // Surface WebSocket-level errors (e.g. pod not found, RBAC denied) as rejections.
-        socket.on("error", (err: Error) => reject(err));
+        socket.on("error", (err: unknown) => {
+          if (!settled) reject(err instanceof Error ? err : new Error(String(err)));
+        });
+        // Some K8s versions close the WebSocket without sending a Status frame.
+        // Treat a clean close as success if the status callback hasn't fired yet.
+        socket.on("close", () => {
+          settle({ exitCode: null, timedOut: false, ...collectOutput() });
+        });
       })
       .catch(reject);
   });
