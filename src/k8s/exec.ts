@@ -109,10 +109,12 @@ export async function execInPod(
         socket.on("error", (err: unknown) => {
           if (!settled) reject(err instanceof Error ? err : new Error(String(err)));
         });
-        // Some K8s versions close the WebSocket without sending a Status frame.
-        // Treat a clean close as success if the status callback hasn't fired yet.
-        socket.on("close", () => {
-          settle({ exitCode: null, timedOut: false, ...collectOutput() });
+        // @kubernetes/client-node closes the WebSocket when stdin ends (web-socket-handler.js),
+        // preventing K8s from sending a Status frame. Infer success from close code + stderr.
+        socket.on("close", (code: unknown) => {
+          const { stdout, stderr } = collectOutput();
+          const inferredExit = code === 1000 && !stderr.trim() ? 0 : 1;
+          settle({ exitCode: inferredExit, timedOut: false, stdout, stderr });
         });
       })
       .catch(reject);
