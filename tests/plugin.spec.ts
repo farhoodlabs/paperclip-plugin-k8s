@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createEnvironmentTestHarness } from "@paperclipai/plugin-sdk/testing";
 
-vi.mock("../src/k8s/client.js", () => ({
-  buildClient: vi.fn().mockReturnValue({ core: {}, kc: {} }),
-  loadKubeConfig: vi.fn(),
-}));
+vi.mock("../src/k8s/client.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/k8s/client.js")>();
+  return {
+    ...original,
+    buildClient: vi.fn().mockReturnValue({ core: { readNamespace: vi.fn().mockResolvedValue({}) }, kc: {} }),
+    loadKubeConfig: vi.fn(),
+  };
+});
 
 vi.mock("../src/k8s/pod.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/k8s/pod.js")>();

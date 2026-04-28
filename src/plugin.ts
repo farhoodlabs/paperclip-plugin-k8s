@@ -16,7 +16,7 @@ import type {
 } from "@paperclipai/plugin-sdk";
 
 import { parseDriverConfig } from "./config.js";
-import { buildClient } from "./k8s/client.js";
+import { buildClient, k8sErrorMessage } from "./k8s/client.js";
 import {
   createLeasePod,
   deleteLeasePod,
@@ -71,20 +71,17 @@ const plugin = definePlugin({
     const config = parseDriverConfig(params.config);
     try {
       const client = buildClient(config);
-      // TODO: replace with a real namespace lookup (e.g. core.readNamespace) so the
-      // probe actually exercises kubeconfig + RBAC.
-      void client;
+      await client.core.readNamespace(config.namespace);
       return {
         ok: true,
-        summary: `Loaded kubeconfig for namespace ${config.namespace}.`,
+        summary: `Connected to namespace ${config.namespace}.`,
         metadata: { provider: "k8s", namespace: config.namespace, image: config.image },
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
-        summary: `Kubernetes probe failed for namespace ${config.namespace}.`,
-        metadata: { provider: "k8s", namespace: config.namespace, error: message },
+        summary: `Kubernetes probe failed: ${k8sErrorMessage(error)}`,
+        metadata: { provider: "k8s", namespace: config.namespace, error: k8sErrorMessage(error) },
       };
     }
   },
@@ -96,8 +93,12 @@ const plugin = definePlugin({
     const client = buildClient(config);
     const leaseId = cryptoRandomLeaseId();
 
-    await createLeasePod(client, config, leaseId, params.companyId);
-    await waitPodReady(client, config, leaseId, config.podReadyTimeoutMs);
+    try {
+      await createLeasePod(client, config, leaseId, params.companyId);
+      await waitPodReady(client, config, leaseId, config.podReadyTimeoutMs);
+    } catch (error) {
+      throw new Error(`Failed to acquire K8s lease pod: ${k8sErrorMessage(error)}`);
+    }
 
     return {
       providerLeaseId: leaseId,

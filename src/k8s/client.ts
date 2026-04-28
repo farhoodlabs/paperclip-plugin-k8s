@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { CoreV1Api, KubeConfig } from "@kubernetes/client-node";
+import { CoreV1Api, HttpError, KubeConfig } from "@kubernetes/client-node";
 import type { K8sDriverConfig } from "../config.js";
 
 export interface K8sClient {
@@ -56,6 +56,19 @@ export function loadKubeConfig(config: K8sDriverConfig): KubeConfig {
     );
   }
   return kc;
+}
+
+// Extract a human-readable message from a @kubernetes/client-node HttpError.
+// The body is a K8s Status object: { message, reason, code }.
+export function k8sErrorMessage(error: unknown): string {
+  if (error instanceof HttpError) {
+    const body = error.body as { message?: string; reason?: string } | undefined;
+    const detail = body?.message ?? body?.reason;
+    return detail
+      ? `Kubernetes API error ${error.statusCode}: ${detail}`
+      : `Kubernetes API error ${error.statusCode}`;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function buildClient(config: K8sDriverConfig): K8sClient {
