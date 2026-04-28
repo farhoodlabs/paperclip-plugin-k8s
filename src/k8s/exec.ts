@@ -70,8 +70,8 @@ export async function execInPod(
   const stderrChunks: Buffer[] = [];
   const stdoutStream = new PassThrough();
   const stderrStream = new PassThrough();
-  stdoutStream.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-  stderrStream.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+  stdoutStream.on("data", (chunk: Buffer) => { stdoutChunks.push(chunk); process.stderr.write(`[k8s-exec] stdout chunk ${chunk.length}b\n`); });
+  stderrStream.on("data", (chunk: Buffer) => { stderrChunks.push(chunk); process.stderr.write(`[k8s-exec] stderr chunk ${chunk.length}b\n`); });
 
   let ws: { close(): void; on(event: string, handler: (...args: unknown[]) => void): void } | undefined;
 

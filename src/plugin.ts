@@ -193,11 +193,14 @@ const plugin = definePlugin({
       // DEBUG: remove before release
       console.error("[k8s-plugin] exec", JSON.stringify({
         command: params.command,
+        args: params.args,
+        cwd: params.cwd,
         envKeys: Object.keys(params.env ?? {}),
+        stdinLen: params.stdin?.length ?? 0,
         exitCode: result.exitCode,
         stdoutLen: result.stdout.length,
-        stdoutHead: result.stdout.slice(0, 200),
-        stderrHead: result.stderr.slice(0, 200),
+        stdoutHead: result.stdout.slice(0, 300),
+        stderrHead: result.stderr.slice(0, 300),
       }));
       return result;
     } catch (error) {
