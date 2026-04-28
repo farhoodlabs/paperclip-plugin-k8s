@@ -93,14 +93,16 @@ export async function execInPod(
     stderr: Buffer.concat(stderrChunks).toString("utf8"),
   });
 
-  // After the Status frame arrives we briefly wait for any in-flight stdout/stderr
-  // chunks to land in the PassThrough, then settle. Waiting for socket.on("close")
-  // can add multiple seconds of latency (K8s API server flush) and pushes the total
-  // execute time over the host's 30s RPC budget.
+  // After Status arrives we want a short drain so any in-flight stdout/stderr lands
+  // before we resolve. But we also want to settle promptly on close. Either signal
+  // can trigger settlement — but if Status has fired, its exit code is authoritative
+  // (the close handler must NOT race in with an inferred exit code).
   const STATUS_DRAIN_MS = 50;
 
   const statusPromise = new Promise<ExecResult>((resolve, reject) => {
     let settled = false;
+    // undefined = Status frame not yet received; null/number = exit code from Status.
+    let pendingExitCode: number | null | undefined = undefined;
 
     const settle = (result: ExecResult) => {
       if (settled) return;
@@ -121,10 +123,10 @@ export async function execInPod(
         wsStdin,
         false,
         (status: V1Status) => {
-          const exitCode = extractExitCode(status);
+          pendingExitCode = extractExitCode(status);
           setTimeout(() => {
             const { stdout, stderr } = collectOutput();
-            settle({ exitCode, timedOut: false, stdout, stderr });
+            settle({ exitCode: pendingExitCode!, timedOut: false, stdout, stderr });
           }, STATUS_DRAIN_MS);
         },
       )
@@ -133,13 +135,18 @@ export async function execInPod(
         socket.on("error", (err: unknown) => {
           if (!settled) reject(err instanceof Error ? err : new Error(String(err)));
         });
-        // Fallback: some K8s versions / @kubernetes/client-node paths close the socket
-        // without ever emitting the Status frame (notably when stdin EOFs).
         socket.on("close", (code: unknown) => {
           if (settled) return;
           const { stdout, stderr } = collectOutput();
-          const inferredExit = code === 1000 && !stderr.trim() ? 0 : 1;
-          settle({ exitCode: inferredExit, timedOut: false, stdout, stderr });
+          if (pendingExitCode !== undefined) {
+            // Status arrived; use its exit code instead of waiting on the drain timer.
+            settle({ exitCode: pendingExitCode, timedOut: false, stdout, stderr });
+          } else {
+            // No Status — typically the stdin-EOF path where @kubernetes/client-node
+            // closes the socket before K8s sends a Status frame.
+            const inferredExit = code === 1000 && !stderr.trim() ? 0 : 1;
+            settle({ exitCode: inferredExit, timedOut: false, stdout, stderr });
+          }
         });
       })
       .catch(reject);
@@ -154,5 +161,18 @@ export async function execInPod(
     }, options.timeoutMs),
   );
 
-  return Promise.race([statusPromise, timeoutPromise]);
+  const result = await Promise.race([statusPromise, timeoutPromise]);
+  return normalizeBenignTarWarning(result);
+}
+
+// GNU tar exits 1 on the "archive cannot contain itself" warning when the
+// output file lives inside the directory being archived. The host-side runtime
+// produces exactly this layout for workspace-download.tar, expects exit 0
+// (which is what BusyBox tar / the e2b sandbox returns), and treats anything
+// else as a failure. Map this benign warning to exit 0 so we match.
+function normalizeBenignTarWarning(result: ExecResult): ExecResult {
+  if (result.exitCode === 1 && /archive cannot contain itself/i.test(result.stderr)) {
+    return { ...result, exitCode: 0 };
+  }
+  return result;
 }
