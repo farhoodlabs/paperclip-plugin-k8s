@@ -19,6 +19,14 @@ export function loadKubeConfig(config: K8sDriverConfig): KubeConfig {
   } catch {
     kc.loadFromDefault();
   }
+  const cluster = kc.getCurrentCluster();
+  if (!cluster?.server) {
+    throw new Error(
+      "No Kubernetes cluster URL found in kubeconfig. " +
+      "Set kubeconfigPath in the environment driver config to point at your kubeconfig file, " +
+      "or ensure a current context with a valid server URL is set in ~/.kube/config.",
+    );
+  }
   return kc;
 }
 
