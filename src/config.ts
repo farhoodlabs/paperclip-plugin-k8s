@@ -1,5 +1,6 @@
 export interface K8sDriverConfig {
   namespace: string;
+  // Empty string means "auto-resolve from the worker's own pod at acquire time."
   image: string;
   kubeconfigPath: string | null;
   serviceAccountName: string | null;
@@ -47,13 +48,9 @@ function asStringMap(value: unknown): Record<string, string> {
 }
 
 export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig {
-  const image = asTrimmedString(raw.image);
-  if (!image) {
-    throw new Error("K8s sandbox provider requires `image` in config.");
-  }
   return {
     namespace: asTrimmedString(raw.namespace) ?? "default",
-    image,
+    image: asTrimmedString(raw.image) ?? "",
     kubeconfigPath: asTrimmedString(raw.kubeconfigPath),
     serviceAccountName: asTrimmedString(raw.serviceAccountName),
     workspaceMountPath: asTrimmedString(raw.workspaceMountPath) ?? "/workspace",

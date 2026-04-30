@@ -15,8 +15,8 @@ import type {
   PluginEnvironmentValidationResult,
 } from "@paperclipai/plugin-sdk";
 
-import { parseDriverConfig } from "./config.js";
-import { buildClient, k8sErrorMessage } from "./k8s/client.js";
+import { parseDriverConfig, type K8sDriverConfig } from "./config.js";
+import { buildClient, k8sErrorMessage, type K8sClient } from "./k8s/client.js";
 import {
   createLeasePod,
   deleteLeasePod,
@@ -24,7 +24,17 @@ import {
   podName,
   waitPodReady,
 } from "./k8s/pod.js";
+import { resolveSelfImage } from "./k8s/self-image.js";
 import { execInPod } from "./k8s/exec.js";
+
+async function resolveImage(config: K8sDriverConfig, client: K8sClient): Promise<string> {
+  if (config.image) return config.image;
+  const fromHost = await resolveSelfImage(client);
+  if (fromHost) return fromHost;
+  throw new Error(
+    "K8s sandbox provider requires `image` in config (and could not auto-detect from the host pod).",
+  );
+}
 
 function leaseMetadata(input: {
   leaseId: string;
@@ -58,7 +68,8 @@ const plugin = definePlugin({
   ): Promise<PluginEnvironmentValidationResult> {
     try {
       const config = parseDriverConfig(params.config);
-      return { ok: true, normalizedConfig: { ...config } };
+      const image = await resolveImage(config, buildClient(config));
+      return { ok: true, normalizedConfig: { ...config, image } };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { ok: false, errors: [message] };
@@ -72,10 +83,11 @@ const plugin = definePlugin({
     try {
       const client = buildClient(config);
       await client.core.readNamespace(config.namespace);
+      const image = config.image || (await resolveSelfImage(client)) || null;
       return {
         ok: true,
         summary: `Connected to namespace ${config.namespace}.`,
-        metadata: { provider: "k8s", namespace: config.namespace, image: config.image },
+        metadata: { provider: "k8s", namespace: config.namespace, image },
       };
     } catch (error) {
       return {
@@ -89,8 +101,9 @@ const plugin = definePlugin({
   async onEnvironmentAcquireLease(
     params: PluginEnvironmentAcquireLeaseParams,
   ): Promise<PluginEnvironmentLease> {
-    const config = parseDriverConfig(params.config);
-    const client = buildClient(config);
+    const parsed = parseDriverConfig(params.config);
+    const client = buildClient(parsed);
+    const config: K8sDriverConfig = { ...parsed, image: await resolveImage(parsed, client) };
     const leaseId = cryptoRandomLeaseId();
 
     try {

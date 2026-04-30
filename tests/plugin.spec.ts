@@ -67,8 +67,9 @@ describe("parseDriverConfig", () => {
     expect(cfg.execTimeoutMs).toBe(300_000);
   });
 
-  it("throws if image is missing", () => {
-    expect(() => parseDriverConfig({})).toThrow("image");
+  it("allows missing image (resolution is deferred to acquire-time)", () => {
+    const cfg = parseDriverConfig({});
+    expect(cfg.image).toBe("");
   });
 
   it("respects all optional fields", () => {

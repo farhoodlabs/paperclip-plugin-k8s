@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.17";
+const PLUGIN_VERSION = "0.1.18";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -33,7 +33,8 @@ const manifest: PaperclipPluginManifestV1 = {
           },
           image: {
             type: "string",
-            description: "Container image to run inside the lease pod.",
+            description:
+              "Container image to run inside the lease pod. Optional when the plugin worker runs in-cluster — defaults to the worker's host pod image, which is digest-pinned and already cached on the node.",
           },
           kubeconfigPath: {
             type: "string",
@@ -88,7 +89,6 @@ const manifest: PaperclipPluginManifestV1 = {
             default: 1000,
           },
         },
-        required: ["image"],
       },
     },
   ],
