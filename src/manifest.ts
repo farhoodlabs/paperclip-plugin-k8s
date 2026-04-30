@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.18";
+const PLUGIN_VERSION = "0.1.19";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -63,9 +63,9 @@ const manifest: PaperclipPluginManifestV1 = {
             description: "How long to wait for the pod to reach Ready before failing acquire.",
             default: 120000,
           },
-          execTimeoutMs: {
+          timeoutMs: {
             type: "number",
-            description: "Default timeout per execute call.",
+            description: "Default timeout per execute call. The host extends its environmentExecute RPC budget to match this value.",
             default: 300000,
           },
           env: {

@@ -8,7 +8,7 @@ export interface K8sDriverConfig {
   pvcName: string | null;
   reuseLease: boolean;
   podReadyTimeoutMs: number;
-  execTimeoutMs: number;
+  timeoutMs: number;
   env: Record<string, string>;
   runAsUser: number | null;
   runAsGroup: number | null;
@@ -57,7 +57,7 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     pvcName: asTrimmedString(raw.pvcName),
     reuseLease: raw.reuseLease === true,
     podReadyTimeoutMs: asPositiveInt(raw.podReadyTimeoutMs, 120_000),
-    execTimeoutMs: asPositiveInt(raw.execTimeoutMs, 300_000),
+    timeoutMs: asPositiveInt(raw.timeoutMs, 300_000),
     env: asStringMap(raw.env),
     runAsUser: asNonNegativeIntOrNull(raw.runAsUser ?? 1000),
     runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),

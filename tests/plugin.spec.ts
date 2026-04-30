@@ -64,7 +64,7 @@ describe("parseDriverConfig", () => {
     expect(cfg.workspaceMountPath).toBe("/workspace");
     expect(cfg.reuseLease).toBe(false);
     expect(cfg.podReadyTimeoutMs).toBe(120_000);
-    expect(cfg.execTimeoutMs).toBe(300_000);
+    expect(cfg.timeoutMs).toBe(300_000);
   });
 
   it("allows missing image (resolution is deferred to acquire-time)", () => {
@@ -82,7 +82,7 @@ describe("parseDriverConfig", () => {
       pvcName: "my-pvc",
       reuseLease: true,
       podReadyTimeoutMs: 60_000,
-      execTimeoutMs: 90_000,
+      timeoutMs: 90_000,
       env: { FOO: "bar" },
     });
     expect(cfg.namespace).toBe("prod");
@@ -92,7 +92,7 @@ describe("parseDriverConfig", () => {
     expect(cfg.pvcName).toBe("my-pvc");
     expect(cfg.reuseLease).toBe(true);
     expect(cfg.podReadyTimeoutMs).toBe(60_000);
-    expect(cfg.execTimeoutMs).toBe(90_000);
+    expect(cfg.timeoutMs).toBe(90_000);
     expect(cfg.env).toEqual({ FOO: "bar" });
   });
 

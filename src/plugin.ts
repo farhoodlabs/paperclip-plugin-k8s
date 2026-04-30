@@ -201,7 +201,7 @@ const plugin = definePlugin({
         cwd: params.cwd,
         env: params.env,
         stdin: params.stdin ?? undefined,
-        timeoutMs: params.timeoutMs ?? config.execTimeoutMs,
+        timeoutMs: params.timeoutMs ?? config.timeoutMs,
       });
     } catch (error) {
       throw new Error(`K8s exec failed: ${k8sErrorMessage(error)}`);
