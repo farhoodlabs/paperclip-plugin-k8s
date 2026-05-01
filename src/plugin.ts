@@ -128,7 +128,7 @@ const plugin = definePlugin({
         workspaceMountPath: config.workspaceMountPath,
         reuseLease: config.reuseLease,
         resumedLease: false,
-        paperclipApiUrl: config.paperclipApiUrl,
+        paperclipApiUrl: config.env.PAPERCLIP_API_URL ?? null,
         paperclipTransport: config.paperclipTransport,
       }),
     };
@@ -151,7 +151,7 @@ const plugin = definePlugin({
         workspaceMountPath: config.workspaceMountPath,
         reuseLease: config.reuseLease,
         resumedLease: true,
-        paperclipApiUrl: config.paperclipApiUrl,
+        paperclipApiUrl: config.env.PAPERCLIP_API_URL ?? null,
         paperclipTransport: config.paperclipTransport,
       }),
     };
