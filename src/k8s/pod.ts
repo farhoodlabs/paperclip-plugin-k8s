@@ -15,12 +15,7 @@ export function buildPodManifest(
   companyId: string,
 ): V1Pod {
   const name = podName(leaseId);
-  // Inject PAPERCLIP_API_URL into the lease pod env when configured, so processes
-  // inside the pod can reach the host API directly. config.env still overrides.
-  const baseEnv: Record<string, string> = {};
-  if (config.paperclipApiUrl) baseEnv.PAPERCLIP_API_URL = config.paperclipApiUrl;
-  const mergedEnv = { ...baseEnv, ...config.env };
-  const env = Object.entries(mergedEnv).map(([k, v]) => ({ name: k, value: v }));
+  const env = Object.entries(config.env).map(([k, v]) => ({ name: k, value: v }));
   const volumes = config.pvcName
     ? [{ name: "workspace", persistentVolumeClaim: { claimName: config.pvcName } }]
     : [{ name: "workspace", emptyDir: {} }];

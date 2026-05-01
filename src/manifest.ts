@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.21";
+const PLUGIN_VERSION = "0.1.22";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -70,7 +70,12 @@ const manifest: PaperclipPluginManifestV1 = {
           },
           paperclipApiUrl: {
             type: "string",
-            description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. http://paperclip.<namespace>.svc.cluster.local:3100). When set, the host selects direct transport and skips the queue-based callback bridge. Also injected into the lease pod env as PAPERCLIP_API_URL.",
+            description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. http://paperclip.<namespace>.svc.cluster.local:3100). The host's claude adapter overrides the agent's PAPERCLIP_API_URL env to point here. Also enables direct transport by default.",
+          },
+          paperclipTransport: {
+            type: "string",
+            enum: ["direct", "bridge"],
+            description: "Force the host's transport selection. \"direct\" skips the in-pod callback bridge and has the agent call paperclipApiUrl over HTTP. \"bridge\" always starts the queue-based callback bridge. If unset, the host picks direct when paperclipApiUrl is set, else bridge.",
           },
           env: {
             type: "object",

@@ -43,10 +43,11 @@ function leaseMetadata(input: {
   reuseLease: boolean;
   resumedLease: boolean;
   paperclipApiUrl: string | null;
+  paperclipTransport: "direct" | "bridge" | null;
 }) {
-  // The host's environment-execution-target reads lease.metadata.paperclipApiUrl —
-  // when set, it selects paperclipTransport: "direct" (agent calls the host API
-  // directly via the configured URL) instead of the queue-based callback bridge.
+  // The host's environment-execution-target reads:
+  // - lease.metadata.paperclipApiUrl → AdapterSandboxExecutionTarget.paperclipApiUrl
+  // - lease.metadata.paperclipTransport → forces direct/bridge selection (else auto)
   return {
     provider: "k8s",
     leaseId: input.leaseId,
@@ -56,6 +57,7 @@ function leaseMetadata(input: {
     reuseLease: input.reuseLease,
     resumedLease: input.resumedLease,
     ...(input.paperclipApiUrl ? { paperclipApiUrl: input.paperclipApiUrl } : {}),
+    ...(input.paperclipTransport ? { paperclipTransport: input.paperclipTransport } : {}),
   };
 }
 
@@ -127,6 +129,7 @@ const plugin = definePlugin({
         reuseLease: config.reuseLease,
         resumedLease: false,
         paperclipApiUrl: config.paperclipApiUrl,
+        paperclipTransport: config.paperclipTransport,
       }),
     };
   },
@@ -149,6 +152,7 @@ const plugin = definePlugin({
         reuseLease: config.reuseLease,
         resumedLease: true,
         paperclipApiUrl: config.paperclipApiUrl,
+        paperclipTransport: config.paperclipTransport,
       }),
     };
   },

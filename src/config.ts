@@ -9,11 +9,15 @@ export interface K8sDriverConfig {
   reuseLease: boolean;
   podReadyTimeoutMs: number;
   timeoutMs: number;
-  // When set, surfaced to the host as lease.metadata.paperclipApiUrl (which flips
-  // the host's environment-execution-target to paperclipTransport: "direct",
-  // bypassing the queue-based callback bridge) and injected into the lease pod's
-  // container env as PAPERCLIP_API_URL.
+  // When set, surfaced to the host as lease.metadata.paperclipApiUrl. The host
+  // builds AdapterSandboxExecutionTarget.paperclipApiUrl from this and the claude
+  // adapter overrides the agent's PAPERCLIP_API_URL env to point at it.
   paperclipApiUrl: string | null;
+  // Forces the host's transport selection. Surfaced as lease.metadata.paperclipTransport.
+  // - "direct": skip the in-pod callback bridge; agent calls paperclipApiUrl directly
+  // - "bridge": always start the queue-based callback bridge
+  // - null: host's auto-logic applies (direct if paperclipApiUrl set, else bridge)
+  paperclipTransport: "direct" | "bridge" | null;
   env: Record<string, string>;
   runAsUser: number | null;
   runAsGroup: number | null;
@@ -64,6 +68,10 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     podReadyTimeoutMs: asPositiveInt(raw.podReadyTimeoutMs, 120_000),
     timeoutMs: asPositiveInt(raw.timeoutMs, 300_000),
     paperclipApiUrl: asTrimmedString(raw.paperclipApiUrl),
+    paperclipTransport:
+      raw.paperclipTransport === "direct" || raw.paperclipTransport === "bridge"
+        ? raw.paperclipTransport
+        : null,
     env: asStringMap(raw.env),
     runAsUser: asNonNegativeIntOrNull(raw.runAsUser ?? 1000),
     runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),
