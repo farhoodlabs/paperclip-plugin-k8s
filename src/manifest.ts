@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.20";
+const PLUGIN_VERSION = "0.1.21";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -67,6 +67,10 @@ const manifest: PaperclipPluginManifestV1 = {
             type: "number",
             description: "Default timeout per execute call. The host extends its environmentExecute RPC budget to match this value.",
             default: 300000,
+          },
+          paperclipApiUrl: {
+            type: "string",
+            description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. http://paperclip.<namespace>.svc.cluster.local:3100). When set, the host selects direct transport and skips the queue-based callback bridge. Also injected into the lease pod env as PAPERCLIP_API_URL.",
           },
           env: {
             type: "object",

@@ -15,17 +15,11 @@ export function buildPodManifest(
   companyId: string,
 ): V1Pod {
   const name = podName(leaseId);
-  // Inherit PAPERCLIP_API_URL (and the runtime variant) from the worker process so the
-  // lease pod can reach the host paperclip API directly via the in-cluster service DNS,
-  // bypassing the queue-based callback bridge. The bridge defaults paperclipTransport to
-  // "bridge" only when paperclipApiUrl isn't set; passing this through opts the host into
-  // direct mode. config.env still overrides, so users can disable or change it.
-  const inheritedEnv: Record<string, string> = {};
-  for (const key of ["PAPERCLIP_API_URL", "PAPERCLIP_RUNTIME_API_URL"]) {
-    const value = process.env[key];
-    if (value && value.trim().length > 0) inheritedEnv[key] = value;
-  }
-  const mergedEnv = { ...inheritedEnv, ...config.env };
+  // Inject PAPERCLIP_API_URL into the lease pod env when configured, so processes
+  // inside the pod can reach the host API directly. config.env still overrides.
+  const baseEnv: Record<string, string> = {};
+  if (config.paperclipApiUrl) baseEnv.PAPERCLIP_API_URL = config.paperclipApiUrl;
+  const mergedEnv = { ...baseEnv, ...config.env };
   const env = Object.entries(mergedEnv).map(([k, v]) => ({ name: k, value: v }));
   const volumes = config.pvcName
     ? [{ name: "workspace", persistentVolumeClaim: { claimName: config.pvcName } }]

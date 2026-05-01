@@ -9,6 +9,11 @@ export interface K8sDriverConfig {
   reuseLease: boolean;
   podReadyTimeoutMs: number;
   timeoutMs: number;
+  // When set, surfaced to the host as lease.metadata.paperclipApiUrl (which flips
+  // the host's environment-execution-target to paperclipTransport: "direct",
+  // bypassing the queue-based callback bridge) and injected into the lease pod's
+  // container env as PAPERCLIP_API_URL.
+  paperclipApiUrl: string | null;
   env: Record<string, string>;
   runAsUser: number | null;
   runAsGroup: number | null;
@@ -58,6 +63,7 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     reuseLease: raw.reuseLease === true,
     podReadyTimeoutMs: asPositiveInt(raw.podReadyTimeoutMs, 120_000),
     timeoutMs: asPositiveInt(raw.timeoutMs, 300_000),
+    paperclipApiUrl: asTrimmedString(raw.paperclipApiUrl),
     env: asStringMap(raw.env),
     runAsUser: asNonNegativeIntOrNull(raw.runAsUser ?? 1000),
     runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),

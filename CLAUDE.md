@@ -60,13 +60,16 @@ src/
     client.ts   — buildClient(): loads KubeConfig → { core: CoreV1Api, kc: KubeConfig }
     pod.ts      — create/get/delete/waitReady pod; buildPodManifest(); podName()
     exec.ts     — execInPod(): streams a command via K8s exec WebSocket API
+    self-image.ts — resolveSelfImage(): reads the worker's own pod via the
+                    in-cluster K8s API and returns spec.containers[0].image,
+                    used to default the lease pod image
 tests/
   plugin.spec.ts — vitest tests; mocks k8s/* modules, uses createEnvironmentTestHarness
 ```
 
 ### Key design points
 
-**Config parsing is the boundary.** Every hook calls `parseDriverConfig(params.config)` at the top. It throws on missing `image`; the harness catches that in `validateConfig` and returns `{ ok: false }`. All other fields have defaults.
+**Config parsing is the boundary.** Every hook calls `parseDriverConfig(params.config)` at the top. All fields have defaults; nothing throws. `image` may be empty — when it is, `resolveImage(config, client)` in `plugin.ts` falls back to `resolveSelfImage(client)` (reads the worker's own pod spec). `validateConfig` runs the resolver too, so it returns `{ ok: false }` if the field is empty AND we can't auto-resolve (i.e., not running in-cluster).
 
 **`buildClient` is called per-request**, not cached, so kubeconfig changes take effect immediately. Tests mock `../src/k8s/client.js` at the module level via `vi.mock`.
 
@@ -75,6 +78,20 @@ tests/
 **exec wraps the K8s WebSocket exec API** (`@kubernetes/client-node`'s `Exec` class). It builds a `/bin/sh -c` command that layers `cd`, `export`, then `exec <command>`. Exit code comes from the `V1Status` callback, not from a stream.
 
 **reuseLease flag**: `releaseLease` skips pod deletion when `config.reuseLease === true`; `destroyLease` always deletes.
+
+### Host integration constraints
+
+These are upstream behaviors of `paperclipai/paperclip` that the plugin must work around — easy to forget and hard to debug from inside the plugin alone.
+
+**Plugin worker runs with a stripped env.** The host's `server/src/services/plugin-worker-manager.ts` `spawnProcess()` deliberately does not forward `process.env` to the worker — only `PATH`, `NODE_PATH`, `PAPERCLIP_PLUGIN_ID`, `NODE_ENV`, `TZ`. To read anything else the host pod has (e.g. `PAPERCLIP_API_URL`), query the worker's own pod spec via the in-cluster K8s API. `k8s/self-image.ts` already does this for the image; the same pattern extends to `spec.containers[0].env[]`.
+
+**Lease metadata fields the host reads.** `server/src/services/environment-execution-target.ts` reads `lease.metadata.remoteCwd` (where the agent's commands run) and `lease.metadata.paperclipApiUrl`. If `paperclipApiUrl` is set, the host picks `paperclipTransport: "direct"` (agent calls the host API directly via in-cluster service DNS). If null, it falls back to the queue-based callback bridge in `packages/adapter-utils/src/sandbox-callback-bridge.ts`. Setting `paperclipApiUrl` in lease metadata bypasses the bridge entirely.
+
+**RPC timeout asymmetry.** Upstream PR #4802 added `resolvePluginExecuteRpcTimeoutMs` (`server/src/services/plugin-environment-driver.ts`) which extends the `environmentExecute` RPC budget by reading `config.timeoutMs` from the env's driver config. `environmentAcquireLease` has no equivalent — it's capped at the 30s `DEFAULT_RPC_TIMEOUT_MS`. **Pod creation must fit in 30s**, or the host kills acquire even if the plugin would have succeeded.
+
+**Schema evolution has no migration.** Renaming a field in `configSchema` (e.g. `execTimeoutMs` → `timeoutMs` in v0.1.19) does NOT update existing saved env configs in the host's `environments.config` jsonb column. Old rows keep the old key and silently stop working. Options: accept the legacy name as a fallback in `parseDriverConfig`, or have the user re-save the env in the UI to rewrite under the new schema.
+
+**`buildPodManifest` does not set `imagePullPolicy`.** Kubernetes defaults to `Always` for `:latest` tags (digest check on every pod creation; full re-pull on mismatch). For ~1GB images this alone exceeds the 30s acquire budget. Use a digest tag or a non-`:latest` tag so kubelet defaults to `IfNotPresent`. The image auto-default (host pod inheritance) sidesteps this in practice because the host image is already on every node that runs the host.
 
 ### Build system
 
