@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.3.0";
+const PLUGIN_VERSION = "0.3.1";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -12,7 +12,7 @@ const manifest: PaperclipPluginManifestV1 = {
     "Provisions a long-lived Kubernetes pod per environment lease and routes adapter command execution through the K8s exec API.",
   author: "farhoodlabs",
   categories: ["automation"],
-  capabilities: ["environment.drivers.register"],
+  capabilities: ["environment.drivers.register", "instance.settings.register"],
   entrypoints: {
     worker: "./dist/worker.js",
     ui: "./dist/ui/index.js",
