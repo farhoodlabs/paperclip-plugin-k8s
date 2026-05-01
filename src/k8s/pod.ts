@@ -172,16 +172,20 @@ export interface ManagedPodSummary {
   ip: string | null;
   createdAt: string | null;
   leaseId: string | null;
+  companyId: string | null;
 }
 
 // List lease pods in the namespace that this plugin created. Same purpose as
-// listManagedPvcs — awareness in probe metadata, no auto-deletion.
+// listManagedPvcs — awareness in probe metadata, no auto-deletion. We filter
+// only on the managed-by label so legacy pods (created before v0.2.0 added the
+// company-id label) still appear. Per-company filtering is left to the caller
+// since the status page that consumes this is instance-scoped anyway.
 export async function listManagedPods(
   client: K8sClient,
   namespace: string,
-  companyId: string,
+  companyId?: string,
 ): Promise<ManagedPodSummary[]> {
-  const selector = `${PAPERCLIP_MANAGED_BY_LABEL}=${PAPERCLIP_MANAGED_BY_VALUE},${PAPERCLIP_COMPANY_LABEL}=${companyId}`;
+  const selector = `${PAPERCLIP_MANAGED_BY_LABEL}=${PAPERCLIP_MANAGED_BY_VALUE}`;
   const { body } = await client.core.listNamespacedPod(
     namespace,
     undefined, // pretty
@@ -190,18 +194,27 @@ export async function listManagedPods(
     undefined, // fieldSelector
     selector, // labelSelector
   );
-  return (body.items ?? []).map((pod) => ({
-    name: pod.metadata?.name ?? "",
-    phase: pod.status?.phase ?? null,
-    ready: (pod.status?.containerStatuses ?? []).every((cs) => cs.ready === true)
-      && (pod.status?.containerStatuses?.length ?? 0) > 0,
-    nodeName: pod.spec?.nodeName ?? null,
-    ip: pod.status?.podIP ?? null,
-    createdAt: pod.metadata?.creationTimestamp
-      ? new Date(pod.metadata.creationTimestamp).toISOString()
-      : null,
-    leaseId: pod.metadata?.labels?.[PAPERCLIP_LEASE_LABEL] ?? null,
-  }));
+  return (body.items ?? [])
+    .filter((pod) => {
+      // If a companyId is provided, include pods matching that company OR pods
+      // missing the label entirely (legacy, pre-v0.2.0).
+      if (!companyId) return true;
+      const podCompany = pod.metadata?.labels?.[PAPERCLIP_COMPANY_LABEL];
+      return !podCompany || podCompany === companyId;
+    })
+    .map((pod) => ({
+      name: pod.metadata?.name ?? "",
+      phase: pod.status?.phase ?? null,
+      ready: (pod.status?.containerStatuses ?? []).every((cs) => cs.ready === true)
+        && (pod.status?.containerStatuses?.length ?? 0) > 0,
+      nodeName: pod.spec?.nodeName ?? null,
+      ip: pod.status?.podIP ?? null,
+      createdAt: pod.metadata?.creationTimestamp
+        ? new Date(pod.metadata.creationTimestamp).toISOString()
+        : null,
+      leaseId: pod.metadata?.labels?.[PAPERCLIP_LEASE_LABEL] ?? null,
+      companyId: pod.metadata?.labels?.[PAPERCLIP_COMPANY_LABEL] ?? null,
+    }));
 }
 
 export interface ManagedPvcSummary {
@@ -211,16 +224,17 @@ export interface ManagedPvcSummary {
   phase: string | null;
   createdAt: string | null;
   createdByLeaseId: string | null;
+  companyId: string | null;
 }
 
-// List PVCs in the namespace that this plugin created. Used by probe to surface
-// awareness of plugin-owned storage in the UI without auto-deletion risk.
+// List PVCs in the namespace that this plugin created. Same filtering policy
+// as listManagedPods — filter by managed-by only so legacy resources show up.
 export async function listManagedPvcs(
   client: K8sClient,
   namespace: string,
-  companyId: string,
+  companyId?: string,
 ): Promise<ManagedPvcSummary[]> {
-  const selector = `${PAPERCLIP_MANAGED_BY_LABEL}=${PAPERCLIP_MANAGED_BY_VALUE},${PAPERCLIP_COMPANY_LABEL}=${companyId}`;
+  const selector = `${PAPERCLIP_MANAGED_BY_LABEL}=${PAPERCLIP_MANAGED_BY_VALUE}`;
   const { body } = await client.core.listNamespacedPersistentVolumeClaim(
     namespace,
     undefined, // pretty
@@ -229,16 +243,23 @@ export async function listManagedPvcs(
     undefined, // fieldSelector
     selector, // labelSelector
   );
-  return (body.items ?? []).map((pvc) => ({
-    name: pvc.metadata?.name ?? "",
-    size: pvc.spec?.resources?.requests?.storage ?? null,
-    storageClass: pvc.spec?.storageClassName ?? null,
-    phase: pvc.status?.phase ?? null,
-    createdAt: pvc.metadata?.creationTimestamp
-      ? new Date(pvc.metadata.creationTimestamp).toISOString()
-      : null,
-    createdByLeaseId: pvc.metadata?.labels?.[PAPERCLIP_CREATED_BY_LEASE_LABEL] ?? null,
-  }));
+  return (body.items ?? [])
+    .filter((pvc) => {
+      if (!companyId) return true;
+      const pvcCompany = pvc.metadata?.labels?.[PAPERCLIP_COMPANY_LABEL];
+      return !pvcCompany || pvcCompany === companyId;
+    })
+    .map((pvc) => ({
+      name: pvc.metadata?.name ?? "",
+      size: pvc.spec?.resources?.requests?.storage ?? null,
+      storageClass: pvc.spec?.storageClassName ?? null,
+      phase: pvc.status?.phase ?? null,
+      createdAt: pvc.metadata?.creationTimestamp
+        ? new Date(pvc.metadata.creationTimestamp).toISOString()
+        : null,
+      createdByLeaseId: pvc.metadata?.labels?.[PAPERCLIP_CREATED_BY_LEASE_LABEL] ?? null,
+      companyId: pvc.metadata?.labels?.[PAPERCLIP_COMPANY_LABEL] ?? null,
+    }));
 }
 
 export async function getLeasePod(
