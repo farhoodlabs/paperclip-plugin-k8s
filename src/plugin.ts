@@ -43,6 +43,11 @@ function leaseMetadata(input: {
   reuseLease: boolean;
   resumedLease: boolean;
 }) {
+  // Surface the worker's PAPERCLIP_API_URL so the host's environment-execution-target
+  // selects "direct" transport (agent calls the host API directly via in-cluster service
+  // DNS) instead of the queue-based callback bridge. Bridge mode is fragile and depends
+  // on per-request filesystem sync into the pod; direct mode is a single HTTP hop.
+  const paperclipApiUrl = process.env.PAPERCLIP_API_URL?.trim();
   return {
     provider: "k8s",
     leaseId: input.leaseId,
@@ -51,6 +56,7 @@ function leaseMetadata(input: {
     remoteCwd: input.workspaceMountPath,
     reuseLease: input.reuseLease,
     resumedLease: input.resumedLease,
+    ...(paperclipApiUrl ? { paperclipApiUrl } : {}),
   };
 }
 

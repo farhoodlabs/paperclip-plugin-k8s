@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.19";
+const PLUGIN_VERSION = "0.1.20";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
