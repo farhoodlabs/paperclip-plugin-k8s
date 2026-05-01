@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.27";
+const PLUGIN_VERSION = "0.1.28";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -26,6 +26,13 @@ const manifest: PaperclipPluginManifestV1 = {
       configSchema: {
         type: "object",
         properties: {
+          // --- Cluster connection ---
+          kubeconfigPath: {
+            type: "string",
+            description: "Path to a kubeconfig file. Falls back to in-cluster config or ~/.kube/config.",
+          },
+
+          // --- Pod identity ---
           namespace: {
             type: "string",
             description: "Kubernetes namespace for the lease pod and any owned resources. When the plugin worker runs in-cluster and this is left blank, defaults to the worker's own namespace (read from the in-cluster service account). Falls back to \"default\" otherwise.",
@@ -34,14 +41,12 @@ const manifest: PaperclipPluginManifestV1 = {
             type: "string",
             description: "Container image to run inside the lease pod. When the plugin worker runs in-cluster and this is left blank, defaults to the worker's host pod image, which is digest-pinned and already cached on the node.",
           },
-          kubeconfigPath: {
-            type: "string",
-            description: "Path to a kubeconfig file. Falls back to in-cluster config or ~/.kube/config.",
-          },
           serviceAccountName: {
             type: "string",
             description: "ServiceAccount to attach to the pod. Supports {companyId} placeholder, e.g. \"paperclip-{companyId}\".",
           },
+
+          // --- Workspace ---
           workspaceMountPath: {
             type: "string",
             description: "Path inside the pod where the workspace volume is mounted.",
@@ -51,33 +56,8 @@ const manifest: PaperclipPluginManifestV1 = {
             type: "string",
             description: "Existing PVC name to mount at the workspace path. If omitted, the workspace is ephemeral.",
           },
-          reuseLease: {
-            type: "boolean",
-            description: "Keep the pod running across runs and resume into it on the next lease.",
-            default: false,
-          },
-          podReadyTimeoutMs: {
-            type: "number",
-            description: "How long to wait for the pod to reach Ready before failing acquire.",
-            default: 120000,
-          },
-          timeoutMs: {
-            type: "number",
-            description: "Default timeout per execute call. The host extends its environmentExecute RPC budget to match this value.",
-            default: 300000,
-          },
-          env: {
-            type: "object",
-            description: "Environment variables to set on the pod container.",
-            properties: {
-              PAPERCLIP_API_URL: {
-                type: "string",
-                title: "PAPERCLIP_API_URL",
-                description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. https://your-host or http://paperclip.<ns>.svc.cluster.local:3100). Setting this enables direct mode: the host routes the agent's API calls straight to this URL via a single HTTP hop instead of through the queue-based in-pod callback bridge. Leave blank to use bridge mode.",
-              },
-            },
-            additionalProperties: { type: "string" },
-          },
+
+          // --- Security context (UID/GID/fsGroup) ---
           runAsUser: {
             type: "number",
             description: "UID for the pod's containers. Defaults to 1000 (the `node` user in the Paperclip image).",
@@ -92,6 +72,39 @@ const manifest: PaperclipPluginManifestV1 = {
             type: "number",
             description: "fsGroup applied to mounted volumes so the runAsUser can write. Defaults to 1000.",
             default: 1000,
+          },
+
+          // --- Lease behavior ---
+          reuseLease: {
+            type: "boolean",
+            description: "Keep the pod running across runs and resume into it on the next lease.",
+            default: false,
+          },
+
+          // --- Timeouts ---
+          podReadyTimeoutMs: {
+            type: "number",
+            description: "How long to wait for the pod to reach Ready before failing acquire.",
+            default: 120000,
+          },
+          timeoutMs: {
+            type: "number",
+            description: "Default timeout per execute call. The host extends its environmentExecute RPC budget to match this value.",
+            default: 300000,
+          },
+
+          // --- Environment variables ---
+          env: {
+            type: "object",
+            description: "Environment variables to set on the pod container.",
+            properties: {
+              PAPERCLIP_API_URL: {
+                type: "string",
+                title: "PAPERCLIP_API_URL",
+                description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. https://your-host or http://paperclip.<ns>.svc.cluster.local:3100). Setting this enables direct mode: the host routes the agent's API calls straight to this URL via a single HTTP hop instead of through the queue-based in-pod callback bridge. Leave blank to use bridge mode.",
+              },
+            },
+            additionalProperties: { type: "string" },
           },
         },
       },
