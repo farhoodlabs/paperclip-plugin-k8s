@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.26";
+const PLUGIN_VERSION = "0.1.27";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -66,11 +66,6 @@ const manifest: PaperclipPluginManifestV1 = {
             description: "Default timeout per execute call. The host extends its environmentExecute RPC budget to match this value.",
             default: 300000,
           },
-          paperclipTransport: {
-            type: "string",
-            enum: ["direct", "bridge"],
-            description: "Force the host's transport selection. \"direct\" skips the in-pod callback bridge and has the agent call paperclipApiUrl over HTTP. \"bridge\" always starts the queue-based callback bridge. If unset, the host picks direct when paperclipApiUrl is set, else bridge.",
-          },
           env: {
             type: "object",
             description: "Environment variables to set on the pod container.",
@@ -78,7 +73,7 @@ const manifest: PaperclipPluginManifestV1 = {
               PAPERCLIP_API_URL: {
                 type: "string",
                 title: "PAPERCLIP_API_URL",
-                description: "URL the agent uses to reach the host Paperclip API (e.g. https://your-host or http://paperclip.<ns>.svc.cluster.local:3100). When set, also surfaced as lease.metadata.paperclipApiUrl which makes the host route the agent's API calls directly here instead of through the in-pod callback bridge.",
+                description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. https://your-host or http://paperclip.<ns>.svc.cluster.local:3100). Setting this enables direct mode: the host routes the agent's API calls straight to this URL via a single HTTP hop instead of through the queue-based in-pod callback bridge. Leave blank to use bridge mode.",
               },
             },
             additionalProperties: { type: "string" },

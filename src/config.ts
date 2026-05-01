@@ -11,11 +11,6 @@ export interface K8sDriverConfig {
   reuseLease: boolean;
   podReadyTimeoutMs: number;
   timeoutMs: number;
-  // Forces the host's transport selection. Surfaced as lease.metadata.paperclipTransport.
-  // - "direct": skip the in-pod callback bridge; agent calls paperclipApiUrl directly
-  // - "bridge": always start the queue-based callback bridge
-  // - null: host's auto-logic applies (direct if paperclipApiUrl set, else bridge)
-  paperclipTransport: "direct" | "bridge" | null;
   env: Record<string, string>;
   runAsUser: number | null;
   runAsGroup: number | null;
@@ -65,10 +60,6 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     reuseLease: raw.reuseLease === true,
     podReadyTimeoutMs: asPositiveInt(raw.podReadyTimeoutMs, 120_000),
     timeoutMs: asPositiveInt(raw.timeoutMs, 300_000),
-    paperclipTransport:
-      raw.paperclipTransport === "direct" || raw.paperclipTransport === "bridge"
-        ? raw.paperclipTransport
-        : null,
     env: asStringMap(raw.env),
     runAsUser: asNonNegativeIntOrNull(raw.runAsUser ?? 1000),
     runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),
