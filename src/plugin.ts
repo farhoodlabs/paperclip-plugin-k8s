@@ -17,6 +17,14 @@ import type {
 
 import { parseDriverConfig, type K8sDriverConfig } from "./config.js";
 import { buildClient, k8sErrorMessage, type K8sClient } from "./k8s/client.js";
+
+// Set in setup(); used by debug() so call sites don't need to thread ctx.
+let pluginLogger: { info: (msg: string, data?: Record<string, unknown>) => void } | null = null;
+
+function debug(config: K8sDriverConfig, message: string, data?: Record<string, unknown>): void {
+  if (!config.debug || !pluginLogger) return;
+  pluginLogger.info(`[debug] ${message}`, data ?? {});
+}
 import {
   createLeasePod,
   deleteLeasePod,
@@ -64,6 +72,7 @@ function leaseMetadata(input: {
 
 const plugin = definePlugin({
   async setup(ctx) {
+    pluginLogger = ctx.logger;
     ctx.logger.info("Kubernetes sandbox provider plugin ready");
 
     // Inventory feed for the settings page UI slot. Lists plugin-owned lease
@@ -120,6 +129,7 @@ const plugin = definePlugin({
   ): Promise<PluginEnvironmentValidationResult> {
     try {
       const config = parseDriverConfig(params.config);
+      debug(config, "validateConfig", { namespace: config.namespace, debug: config.debug });
       const image = await resolveImage(config, buildClient(config));
       return { ok: true, normalizedConfig: { ...config, image } };
     } catch (error) {
@@ -132,6 +142,7 @@ const plugin = definePlugin({
     params: PluginEnvironmentProbeParams,
   ): Promise<PluginEnvironmentProbeResult> {
     const config = parseDriverConfig(params.config);
+    debug(config, "probe", { companyId: params.companyId, namespace: config.namespace });
     try {
       const client = buildClient(config);
       await client.core.readNamespace(config.namespace);
@@ -174,6 +185,18 @@ const plugin = definePlugin({
     const client = buildClient(parsed);
     const config: K8sDriverConfig = { ...parsed, image: await resolveImage(parsed, client) };
     const leaseId = cryptoRandomLeaseId();
+    debug(config, "acquireLease", {
+      leaseId,
+      companyId: params.companyId,
+      environmentId: params.environmentId,
+      namespace: config.namespace,
+      image: config.image,
+      pvcName: config.workspace.pvc.name,
+      pvcCreate: config.workspace.pvc.create,
+      reuseLease: config.reuseLease,
+      timeoutMs: config.timeoutMs,
+      podReadyTimeoutMs: config.podReadyTimeoutMs,
+    });
 
     try {
       await createLeasePod(client, config, leaseId, params.companyId, params.environmentId);
@@ -199,9 +222,11 @@ const plugin = definePlugin({
     params: PluginEnvironmentResumeLeaseParams,
   ): Promise<PluginEnvironmentLease> {
     const config = parseDriverConfig(params.config);
+    debug(config, "resumeLease", { providerLeaseId: params.providerLeaseId, namespace: config.namespace });
     const client = buildClient(config);
     const pod = await getLeasePod(client, config, params.providerLeaseId);
     if (!pod) {
+      debug(config, "resumeLease.expired", { providerLeaseId: params.providerLeaseId });
       return { providerLeaseId: null, metadata: { expired: true } };
     }
     return {
@@ -222,6 +247,7 @@ const plugin = definePlugin({
   ): Promise<void> {
     if (!params.providerLeaseId) return;
     const config = parseDriverConfig(params.config);
+    debug(config, "releaseLease", { providerLeaseId: params.providerLeaseId, reuseLease: config.reuseLease });
     if (config.reuseLease) return;
     const client = buildClient(config);
     await deleteLeasePod(client, config, params.providerLeaseId);
@@ -232,6 +258,7 @@ const plugin = definePlugin({
   ): Promise<void> {
     if (!params.providerLeaseId) return;
     const config = parseDriverConfig(params.config);
+    debug(config, "destroyLease", { providerLeaseId: params.providerLeaseId });
     const client = buildClient(config);
     await deleteLeasePod(client, config, params.providerLeaseId);
   },
@@ -244,6 +271,7 @@ const plugin = definePlugin({
       typeof params.lease.metadata?.remoteCwd === "string"
         ? params.lease.metadata.remoteCwd
         : config.workspace.mountPath;
+    debug(config, "realizeWorkspace", { cwd, providerLeaseId: params.lease.providerLeaseId });
     // TODO: optionally rsync params.workspace into the pod (kubectl cp / tar over exec).
     // For PVC-backed leases this is typically a no-op since the volume persists.
     return {
@@ -264,16 +292,39 @@ const plugin = definePlugin({
       };
     }
     const config = parseDriverConfig(params.config);
+    const effectiveTimeoutMs = params.timeoutMs ?? config.timeoutMs;
+    debug(config, "execute", {
+      providerLeaseId: params.lease.providerLeaseId,
+      command: params.command,
+      argCount: params.args?.length ?? 0,
+      args: (params.args ?? []).slice(0, 8),
+      cwd: params.cwd ?? null,
+      envKeys: Object.keys(params.env ?? {}),
+      stdinBytes: params.stdin ? Buffer.byteLength(params.stdin, "utf8") : 0,
+      paramsTimeoutMs: params.timeoutMs ?? null,
+      configTimeoutMs: config.timeoutMs,
+      effectiveTimeoutMs,
+    });
     const client = buildClient(config);
+    const startedAt = Date.now();
     try {
-      return await execInPod(client, config, params.lease.providerLeaseId, {
+      const result = await execInPod(client, config, params.lease.providerLeaseId, {
         command: params.command,
         args: params.args ?? [],
         cwd: params.cwd,
         env: params.env,
         stdin: params.stdin ?? undefined,
-        timeoutMs: params.timeoutMs ?? config.timeoutMs,
+        timeoutMs: effectiveTimeoutMs,
       });
+      debug(config, "execute.complete", {
+        providerLeaseId: params.lease.providerLeaseId,
+        elapsedMs: Date.now() - startedAt,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        stdoutBytes: result.stdout.length,
+        stderrBytes: result.stderr.length,
+      });
+      return result;
     } catch (error) {
       throw new Error(`K8s exec failed: ${k8sErrorMessage(error)}`);
     }

@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.3.4";
+const PLUGIN_VERSION = "0.3.5";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -170,6 +170,14 @@ const manifest: PaperclipPluginManifestV1 = {
             title: "Timeout (ms)",
             description: "Default timeout per execute call. The host extends its environmentExecute RPC budget to match this value.",
             default: 300000,
+          },
+
+          // --- Diagnostics ---
+          debug: {
+            type: "boolean",
+            title: "Debug Logging",
+            default: false,
+            description: "Emit verbose [debug] logs from each plugin lifecycle hook (validateConfig, probe, acquire/resume/release/destroy lease, realizeWorkspace, execute) including received params and resolved values. Useful for diagnosing timeouts, RPC behavior, and config-passthrough issues. Logs go to the host's plugin log stream — no restart needed to enable; just save the env config. Disable in production.",
           },
 
           // --- Environment variables ---

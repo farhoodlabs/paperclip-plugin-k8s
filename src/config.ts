@@ -15,6 +15,11 @@ export interface K8sDriverConfig {
   runAsGroup: number | null;
   fsGroup: number | null;
   resources: K8sResources | null;
+  // When true, the plugin emits verbose logs from each lifecycle hook
+  // (validateConfig/probe/acquireLease/resumeLease/execute/etc) prefixed with
+  // [debug]. Useful for diagnosing timeouts and config-passthrough issues.
+  // Per-env, defaults to false. Toggle without restart by re-saving the env.
+  debug: boolean;
 }
 
 export interface K8sWorkspaceConfig {
@@ -127,5 +132,6 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),
     fsGroup: asNonNegativeIntOrNull(raw.fsGroup ?? 1000),
     resources: asResources(raw.resources),
+    debug: raw.debug === true,
   };
 }
