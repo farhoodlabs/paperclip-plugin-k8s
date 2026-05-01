@@ -15,6 +15,12 @@ export interface K8sDriverConfig {
   runAsUser: number | null;
   runAsGroup: number | null;
   fsGroup: number | null;
+  resources: K8sResources | null;
+}
+
+export interface K8sResources {
+  requests: { cpu?: string; memory?: string };
+  limits: { cpu?: string; memory?: string };
 }
 
 // Resolves {companyId} placeholder in serviceAccountName.
@@ -49,6 +55,23 @@ function asStringMap(value: unknown): Record<string, string> {
   return out;
 }
 
+function asResources(value: unknown): K8sResources | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const pickQuantities = (input: unknown): { cpu?: string; memory?: string } => {
+    if (!input || typeof input !== "object") return {};
+    const r = input as Record<string, unknown>;
+    const out: { cpu?: string; memory?: string } = {};
+    if (typeof r.cpu === "string" && r.cpu.trim()) out.cpu = r.cpu.trim();
+    if (typeof r.memory === "string" && r.memory.trim()) out.memory = r.memory.trim();
+    return out;
+  };
+  const requests = pickQuantities(raw.requests);
+  const limits = pickQuantities(raw.limits);
+  if (Object.keys(requests).length === 0 && Object.keys(limits).length === 0) return null;
+  return { requests, limits };
+}
+
 export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig {
   return {
     namespace: asTrimmedString(raw.namespace) ?? resolveSelfNamespace() ?? "default",
@@ -64,5 +87,6 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     runAsUser: asNonNegativeIntOrNull(raw.runAsUser ?? 1000),
     runAsGroup: asNonNegativeIntOrNull(raw.runAsGroup ?? 1000),
     fsGroup: asNonNegativeIntOrNull(raw.fsGroup ?? 1000),
+    resources: asResources(raw.resources),
   };
 }

@@ -67,6 +67,7 @@ export function buildPodManifest(
           workingDir: config.workspaceMountPath,
           env,
           volumeMounts,
+          ...(config.resources ? { resources: config.resources } : {}),
         },
       ],
       volumes,
