@@ -38,4 +38,20 @@ async function readSelfImage(client: K8sClient): Promise<string | null> {
 
 export function __resetSelfImageCache(): void {
   cached = undefined;
+  cachedNamespace = undefined;
+}
+
+let cachedNamespace: string | null | undefined;
+
+// Read the namespace the worker is running in. Sync (just a small file read),
+// memoized for the worker's lifetime. Returns null when not running in-cluster.
+export function resolveSelfNamespace(): string | null {
+  if (cachedNamespace !== undefined) return cachedNamespace;
+  try {
+    const ns = fs.readFileSync(SA_NAMESPACE_PATH, "utf8").trim();
+    cachedNamespace = ns.length > 0 ? ns : null;
+  } catch {
+    cachedNamespace = null;
+  }
+  return cachedNamespace;
 }

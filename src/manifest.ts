@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.25";
+const PLUGIN_VERSION = "0.1.26";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -28,13 +28,11 @@ const manifest: PaperclipPluginManifestV1 = {
         properties: {
           namespace: {
             type: "string",
-            description: "Kubernetes namespace for the pod and any owned resources.",
-            default: "default",
+            description: "Kubernetes namespace for the lease pod and any owned resources. When the plugin worker runs in-cluster and this is left blank, defaults to the worker's own namespace (read from the in-cluster service account). Falls back to \"default\" otherwise.",
           },
           image: {
             type: "string",
-            description:
-              "Container image to run inside the lease pod. Optional when the plugin worker runs in-cluster — defaults to the worker's host pod image, which is digest-pinned and already cached on the node.",
+            description: "Container image to run inside the lease pod. When the plugin worker runs in-cluster and this is left blank, defaults to the worker's host pod image, which is digest-pinned and already cached on the node.",
           },
           kubeconfigPath: {
             type: "string",

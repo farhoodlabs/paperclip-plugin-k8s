@@ -1,3 +1,5 @@
+import { resolveSelfNamespace } from "./k8s/self-image.js";
+
 export interface K8sDriverConfig {
   namespace: string;
   // Empty string means "auto-resolve from the worker's own pod at acquire time."
@@ -54,7 +56,7 @@ function asStringMap(value: unknown): Record<string, string> {
 
 export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig {
   return {
-    namespace: asTrimmedString(raw.namespace) ?? "default",
+    namespace: asTrimmedString(raw.namespace) ?? resolveSelfNamespace() ?? "default",
     image: asTrimmedString(raw.image) ?? "",
     kubeconfigPath: asTrimmedString(raw.kubeconfigPath),
     serviceAccountName: asTrimmedString(raw.serviceAccountName),
