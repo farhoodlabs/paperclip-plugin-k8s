@@ -12,7 +12,6 @@ interface PodRow {
   ip: string | null;
   createdAt: string | null;
   leaseId: string | null;
-  companyId: string | null;
 }
 
 interface PvcRow {
@@ -22,7 +21,6 @@ interface PvcRow {
   phase: string | null;
   createdAt: string | null;
   createdByLeaseId: string | null;
-  companyId: string | null;
 }
 
 interface InventoryData {
@@ -62,7 +60,7 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
 
       <Section title="Lease pods">
         <Table
-          headers={["Name", "Phase", "Ready", "Node", "IP", "Lease ID", "Company", "Age"]}
+          headers={["Name", "Phase", "Ready", "Node", "IP", "Lease ID", "Age"]}
           rows={data.pods.map((p) => [
             <Mono key="n">{p.name}</Mono>,
             <Pill key="p" tone={pillTone(p.phase, "Running")}>{p.phase ?? "Unknown"}</Pill>,
@@ -70,7 +68,6 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
             p.nodeName ?? "—",
             <Mono key="ip">{p.ip ?? "—"}</Mono>,
             <Mono key="l">{p.leaseId ?? "—"}</Mono>,
-            <Mono key="c">{p.companyId ? p.companyId.slice(0, 8) : "—"}</Mono>,
             formatRelative(p.createdAt),
           ])}
           emptyMessage="No plugin-owned lease pods in this namespace."
@@ -79,14 +76,13 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
 
       <Section title="Persistent volume claims">
         <Table
-          headers={["Name", "Size", "Storage class", "Phase", "Created by lease", "Company", "Age"]}
+          headers={["Name", "Size", "Storage class", "Phase", "Created by lease", "Age"]}
           rows={data.pvcs.map((v) => [
             <Mono key="n">{v.name}</Mono>,
             v.size ?? "—",
             v.storageClass ?? "—",
             <Pill key="p" tone={pillTone(v.phase, "Bound")}>{v.phase ?? "Unknown"}</Pill>,
             <Mono key="l">{v.createdByLeaseId ?? "—"}</Mono>,
-            <Mono key="c">{v.companyId ? v.companyId.slice(0, 8) : "—"}</Mono>,
             formatRelative(v.createdAt),
           ])}
           emptyMessage="No plugin-owned PVCs in this namespace."
