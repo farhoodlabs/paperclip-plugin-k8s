@@ -128,7 +128,7 @@ describe("podName", () => {
 describe("buildPodManifest", () => {
   it("sets required fields", () => {
     const cfg = parseDriverConfig({ image: "alpine:3.18" });
-    const pod = buildPodManifest(cfg, "lease123", "company-1");
+    const pod = buildPodManifest(cfg, "lease123", "company-1", "env-1");
     expect(pod.metadata?.namespace).toBe("default");
     expect(pod.spec?.containers?.[0]?.image).toBe("alpine:3.18");
     expect(pod.spec?.restartPolicy).toBe("Never");
@@ -136,34 +136,34 @@ describe("buildPodManifest", () => {
 
   it("mounts PVC when workspace.pvc.name is set", () => {
     const cfg = parseDriverConfig({ image: "alpine", workspace: { pvc: { name: "ws-pvc" } } });
-    const pod = buildPodManifest(cfg, "l1", "c1");
+    const pod = buildPodManifest(cfg, "l1", "c1", "env-1");
     const vol = pod.spec?.volumes?.find((v) => v.name === "workspace");
     expect(vol?.persistentVolumeClaim?.claimName).toBe("ws-pvc");
   });
 
   it("accepts legacy top-level pvcName for backward compat", () => {
     const cfg = parseDriverConfig({ image: "alpine", pvcName: "legacy-pvc" });
-    const pod = buildPodManifest(cfg, "l1", "c1");
+    const pod = buildPodManifest(cfg, "l1", "c1", "env-1");
     const vol = pod.spec?.volumes?.find((v) => v.name === "workspace");
     expect(vol?.persistentVolumeClaim?.claimName).toBe("legacy-pvc");
   });
 
   it("uses emptyDir when no PVC name", () => {
     const cfg = parseDriverConfig({ image: "alpine" });
-    const pod = buildPodManifest(cfg, "l1", "c1");
+    const pod = buildPodManifest(cfg, "l1", "c1", "env-1");
     const vol = pod.spec?.volumes?.find((v) => v.name === "workspace");
     expect(vol?.emptyDir).toBeDefined();
   });
 
   it("resolves {companyId} placeholder in serviceAccountName", () => {
     const cfg = parseDriverConfig({ image: "alpine", serviceAccountName: "sa-{companyId}" });
-    const pod = buildPodManifest(cfg, "l1", "acme");
+    const pod = buildPodManifest(cfg, "l1", "acme", "env-1");
     expect(pod.spec?.serviceAccountName).toBe("sa-acme");
   });
 
   it("sets env vars on the container", () => {
     const cfg = parseDriverConfig({ image: "alpine", env: { MY_VAR: "hello" } });
-    const pod = buildPodManifest(cfg, "l1", "c1");
+    const pod = buildPodManifest(cfg, "l1", "c1", "env-1");
     const env = pod.spec?.containers?.[0]?.env ?? [];
     expect(env).toContainEqual({ name: "MY_VAR", value: "hello" });
   });

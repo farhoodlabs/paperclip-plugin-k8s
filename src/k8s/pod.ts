@@ -4,6 +4,7 @@ import type { K8sClient } from "./client.js";
 
 const PAPERCLIP_LEASE_LABEL = "paperclip.farhoodlabs.io/lease-id";
 const PAPERCLIP_COMPANY_LABEL = "paperclip.farhoodlabs.io/company-id";
+const PAPERCLIP_ENV_LABEL = "paperclip.farhoodlabs.io/env-id";
 const PAPERCLIP_CREATED_BY_LEASE_LABEL = "paperclip.farhoodlabs.io/created-by-lease-id";
 export const PAPERCLIP_MANAGED_BY_LABEL = "app.kubernetes.io/managed-by";
 export const PAPERCLIP_MANAGED_BY_VALUE = "paperclip-plugin-k8s";
@@ -17,6 +18,7 @@ export function buildPodManifest(
   config: K8sDriverConfig,
   leaseId: string,
   companyId: string,
+  environmentId: string,
 ): V1Pod {
   const name = podName(leaseId);
   const env = Object.entries(config.env).map(([k, v]) => ({ name: k, value: v }));
@@ -34,6 +36,7 @@ export function buildPodManifest(
       labels: {
         [PAPERCLIP_LEASE_LABEL]: leaseId,
         [PAPERCLIP_COMPANY_LABEL]: companyId,
+        [PAPERCLIP_ENV_LABEL]: environmentId,
         [PAPERCLIP_MANAGED_BY_LABEL]: PAPERCLIP_MANAGED_BY_VALUE,
       },
     },
@@ -99,6 +102,7 @@ export function buildPvcManifest(
   config: K8sDriverConfig,
   leaseId: string,
   companyId: string,
+  environmentId: string,
 ): V1PersistentVolumeClaim {
   if (!config.workspace.pvc.name) {
     throw new Error("Cannot build PVC manifest without workspace.pvc.name");
@@ -112,6 +116,7 @@ export function buildPvcManifest(
       labels: {
         [PAPERCLIP_MANAGED_BY_LABEL]: PAPERCLIP_MANAGED_BY_VALUE,
         [PAPERCLIP_COMPANY_LABEL]: companyId,
+        [PAPERCLIP_ENV_LABEL]: environmentId,
         [PAPERCLIP_CREATED_BY_LEASE_LABEL]: leaseId,
       },
     },
@@ -134,6 +139,7 @@ export async function ensureWorkspacePvc(
   config: K8sDriverConfig,
   leaseId: string,
   companyId: string,
+  environmentId: string,
 ): Promise<"created" | "exists" | "skipped"> {
   if (!config.workspace.pvc.name || !config.workspace.pvc.create) return "skipped";
   try {
@@ -147,7 +153,7 @@ export async function ensureWorkspacePvc(
   }
   await client.core.createNamespacedPersistentVolumeClaim(
     config.namespace,
-    buildPvcManifest(config, leaseId, companyId),
+    buildPvcManifest(config, leaseId, companyId, environmentId),
   );
   return "created";
 }
@@ -157,9 +163,10 @@ export async function createLeasePod(
   config: K8sDriverConfig,
   leaseId: string,
   companyId: string,
+  environmentId: string,
 ): Promise<V1Pod> {
-  await ensureWorkspacePvc(client, config, leaseId, companyId);
-  const manifest = buildPodManifest(config, leaseId, companyId);
+  await ensureWorkspacePvc(client, config, leaseId, companyId, environmentId);
+  const manifest = buildPodManifest(config, leaseId, companyId, environmentId);
   const { body } = await client.core.createNamespacedPod(config.namespace, manifest);
   return body;
 }
@@ -172,6 +179,7 @@ export interface ManagedPodSummary {
   ip: string | null;
   createdAt: string | null;
   leaseId: string | null;
+  environmentId: string | null;
 }
 
 // List lease pods in the namespace that this plugin created. Same purpose as
@@ -201,6 +209,7 @@ export async function listManagedPods(
       ? new Date(pod.metadata.creationTimestamp).toISOString()
       : null,
     leaseId: pod.metadata?.labels?.[PAPERCLIP_LEASE_LABEL] ?? null,
+    environmentId: pod.metadata?.labels?.[PAPERCLIP_ENV_LABEL] ?? null,
   }));
 }
 
@@ -211,6 +220,7 @@ export interface ManagedPvcSummary {
   phase: string | null;
   createdAt: string | null;
   createdByLeaseId: string | null;
+  environmentId: string | null;
 }
 
 // List PVCs in the namespace that this plugin created. Used by probe to surface
@@ -238,6 +248,7 @@ export async function listManagedPvcs(
       ? new Date(pvc.metadata.creationTimestamp).toISOString()
       : null,
     createdByLeaseId: pvc.metadata?.labels?.[PAPERCLIP_CREATED_BY_LEASE_LABEL] ?? null,
+    environmentId: pvc.metadata?.labels?.[PAPERCLIP_ENV_LABEL] ?? null,
   }));
 }
 

@@ -73,7 +73,7 @@ const plugin = definePlugin({
     ctx.data.register("inventory", async (params) => {
       const companyId = typeof params.companyId === "string" ? params.companyId : "";
       if (!companyId) {
-        return { namespace: null, pods: [], pvcs: [], error: "missing companyId" };
+        return { namespace: null, environments: [], error: "missing companyId" };
       }
       try {
         const config = parseDriverConfig({});
@@ -82,13 +82,31 @@ const plugin = definePlugin({
           listManagedPods(client, config.namespace, companyId),
           listManagedPvcs(client, config.namespace, companyId),
         ]);
+        // Group resources by env-id label so the UI can render one section per
+        // environment that currently owns resources in this cluster.
+        const byEnv = new Map<string, { environmentId: string; pods: typeof pods; pvcs: typeof pvcs }>();
+        const ensure = (envId: string) => {
+          let entry = byEnv.get(envId);
+          if (!entry) {
+            entry = { environmentId: envId, pods: [], pvcs: [] };
+            byEnv.set(envId, entry);
+          }
+          return entry;
+        };
+        for (const pod of pods) {
+          if (pod.environmentId) ensure(pod.environmentId).pods.push(pod);
+        }
+        for (const pvc of pvcs) {
+          if (pvc.environmentId) ensure(pvc.environmentId).pvcs.push(pvc);
+        }
         return {
           namespace: config.namespace,
-          pods: pods.map((pod) => ({ id: pod.name, ...pod })),
-          pvcs: pvcs.map((pvc) => ({ id: pvc.name, ...pvc })),
+          environments: Array.from(byEnv.values()).sort((a, b) =>
+            a.environmentId.localeCompare(b.environmentId),
+          ),
         };
       } catch (error) {
-        return { namespace: null, pods: [], pvcs: [], error: k8sErrorMessage(error) };
+        return { namespace: null, environments: [], error: k8sErrorMessage(error) };
       }
     });
   },
@@ -158,7 +176,7 @@ const plugin = definePlugin({
     const leaseId = cryptoRandomLeaseId();
 
     try {
-      await createLeasePod(client, config, leaseId, params.companyId);
+      await createLeasePod(client, config, leaseId, params.companyId, params.environmentId);
       await waitPodReady(client, config, leaseId, config.podReadyTimeoutMs);
     } catch (error) {
       throw new Error(`Failed to acquire K8s lease pod: ${k8sErrorMessage(error)}`);

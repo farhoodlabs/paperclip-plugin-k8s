@@ -12,6 +12,7 @@ interface PodRow {
   ip: string | null;
   createdAt: string | null;
   leaseId: string | null;
+  environmentId: string | null;
 }
 
 interface PvcRow {
@@ -21,12 +22,18 @@ interface PvcRow {
   phase: string | null;
   createdAt: string | null;
   createdByLeaseId: string | null;
+  environmentId: string | null;
+}
+
+interface EnvironmentInventory {
+  environmentId: string;
+  pods: PodRow[];
+  pvcs: PvcRow[];
 }
 
 interface InventoryData {
   namespace: string | null;
-  pods: PodRow[];
-  pvcs: PvcRow[];
+  environments: EnvironmentInventory[];
   error?: string | null;
 }
 
@@ -48,20 +55,58 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
   }
   if (!data) return null;
 
+  const totalPods = data.environments.reduce((acc, env) => acc + env.pods.length, 0);
+  const totalPvcs = data.environments.reduce((acc, env) => acc + env.pvcs.length, 0);
+
   return (
     <div style={containerStyle}>
       <div style={metricsRowStyle}>
-        <Metric label="Lease pods" value={String(data.pods.length)} />
-        <Metric label="Persistent volume claims" value={String(data.pvcs.length)} />
+        <Metric label="Environments" value={String(data.environments.length)} />
+        <Metric label="Lease pods" value={String(totalPods)} />
+        <Metric label="Persistent volume claims" value={String(totalPvcs)} />
         <Metric label="Namespace" value={data.namespace ?? "—"} mono />
       </div>
 
       {data.error ? <div style={errorStyle}>Listing error: {data.error}</div> : null}
 
-      <Section title="Lease pods">
+      {data.environments.length === 0 ? (
+        <div style={{ ...textStyle, fontStyle: "italic" }}>
+          No plugin-owned resources for this company in {data.namespace ?? "this namespace"}.
+        </div>
+      ) : (
+        data.environments.map((env) => <EnvironmentSection key={env.environmentId} env={env} />)
+      )}
+
+      <div>
+        <button onClick={refresh} style={buttonStyle}>Refresh</button>
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentSection({ env }: { env: EnvironmentInventory }) {
+  return (
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        border: "1px solid var(--border, rgba(127,127,127,0.3))",
+        borderRadius: 8,
+        padding: 14,
+        background: "var(--card, transparent)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Environment</h3>
+        <Mono>{env.environmentId}</Mono>
+      </div>
+
+      <div>
+        <Subheader>Lease pods ({env.pods.length})</Subheader>
         <Table
           headers={["Name", "Phase", "Ready", "Node", "IP", "Lease ID", "Age"]}
-          rows={data.pods.map((p) => [
+          rows={env.pods.map((p) => [
             <Mono key="n">{p.name}</Mono>,
             <Pill key="p" tone={pillTone(p.phase, "Running")}>{p.phase ?? "Unknown"}</Pill>,
             p.ready ? "Yes" : "No",
@@ -70,14 +115,15 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
             <Mono key="l">{p.leaseId ?? "—"}</Mono>,
             formatRelative(p.createdAt),
           ])}
-          emptyMessage="No plugin-owned lease pods in this namespace."
+          emptyMessage="No lease pods."
         />
-      </Section>
+      </div>
 
-      <Section title="Persistent volume claims">
+      <div>
+        <Subheader>Persistent volume claims ({env.pvcs.length})</Subheader>
         <Table
           headers={["Name", "Size", "Storage class", "Phase", "Created by lease", "Age"]}
-          rows={data.pvcs.map((v) => [
+          rows={env.pvcs.map((v) => [
             <Mono key="n">{v.name}</Mono>,
             v.size ?? "—",
             v.storageClass ?? "—",
@@ -85,14 +131,10 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
             <Mono key="l">{v.createdByLeaseId ?? "—"}</Mono>,
             formatRelative(v.createdAt),
           ])}
-          emptyMessage="No plugin-owned PVCs in this namespace."
+          emptyMessage="No PVCs."
         />
-      </Section>
-
-      <div>
-        <button onClick={refresh} style={buttonStyle}>Refresh</button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -102,12 +144,20 @@ export function SettingsPage(_props: PluginSettingsPageProps) {
 // because the slot is mounted into the host's DOM.
 // ---------------------------------------------------------------------------
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Subheader({ children }: { children: React.ReactNode }) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{title}</h3>
+    <div
+      style={{
+        fontSize: 12,
+        fontWeight: 600,
+        color: "var(--muted-foreground, #888)",
+        marginBottom: 6,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+      }}
+    >
       {children}
-    </section>
+    </div>
   );
 }
 
@@ -146,7 +196,7 @@ function Table({
 }) {
   if (rows.length === 0) {
     return (
-      <div style={{ ...textStyle, fontStyle: "italic" }}>{emptyMessage}</div>
+      <div style={{ ...textStyle, fontStyle: "italic", padding: "8px 0" }}>{emptyMessage}</div>
     );
   }
   return (
