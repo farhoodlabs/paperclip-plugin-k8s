@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.23";
+const PLUGIN_VERSION = "0.1.24";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -75,7 +75,13 @@ const manifest: PaperclipPluginManifestV1 = {
           },
           env: {
             type: "object",
-            description: "Environment variables to set on the pod container. PAPERCLIP_API_URL is special: when set here, its value is also surfaced as lease.metadata.paperclipApiUrl, which (combined with paperclipTransport=\"direct\" or auto-selection) makes the host route the agent's API calls directly to that URL instead of through the in-pod callback bridge.",
+            description: "Environment variables to set on the pod container.",
+            properties: {
+              PAPERCLIP_API_URL: {
+                type: "string",
+                description: "URL the agent uses to reach the host Paperclip API (e.g. https://your-host or http://paperclip.<ns>.svc.cluster.local:3100). When set, also surfaced as lease.metadata.paperclipApiUrl which makes the host route the agent's API calls directly here instead of through the in-pod callback bridge.",
+              },
+            },
             additionalProperties: { type: "string" },
           },
           runAsUser: {
