@@ -14,7 +14,7 @@ importers:
     devDependencies:
       '@paperclipai/plugin-sdk':
         specifier: ^2026.427.0
-        version: 2026.427.0
+        version: 2026.427.0(react@19.2.5)
       '@rollup/plugin-node-resolve':
         specifier: ^16.0.1
         version: 16.0.3(rollup@4.60.2)
@@ -24,9 +24,15 @@ importers:
       '@types/node':
         specifier: ^24.6.0
         version: 24.12.2
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
       esbuild:
         specifier: ^0.27.3
         version: 0.27.7
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
       rollup:
         specifier: ^4.59.0
         version: 4.60.2
@@ -400,6 +406,9 @@ packages:
   '@types/node@24.12.2':
     resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
 
+  '@types/react@19.2.14':
+    resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
+
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
 
@@ -490,6 +499,9 @@ packages:
 
   core-util-is@1.0.2:
     resolution: {integrity: sha512-3lqz5YjWTYnW6dlDa5TLaTCcShfar1e40rmcJVwCBJC6mWlFuj0eCHIElmG1g5kyuJ/GD+8Wn4FFCcz4gJPfaQ==}
+
+  csstype@3.2.3:
+    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
   dashdash@1.14.1:
     resolution: {integrity: sha512-jRFi8UDGo6j+odZiEpjazZaWqEal3w/basFjQHQEwVtZJGDpxbH1MeYluwCS8Xq5wmLJooDlMgvVarmWfGM44g==}
@@ -724,6 +736,10 @@ packages:
   qs@6.5.5:
     resolution: {integrity: sha512-mzR4sElr1bfCaPJe7m8ilJ6ZXdDaGoObcYR0ZHSsktM/Lt21MVHj5De30GQH2eiZ1qGRTO7LCAzQsUeXTNexWQ==}
     engines: {node: '>=0.6'}
+
+  react@19.2.5:
+    resolution: {integrity: sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA==}
+    engines: {node: '>=0.10.0'}
 
   request@2.88.2:
     resolution: {integrity: sha512-MsvtOrfG9ZcrOwAW+Qi+F6HbD0CWXEh9ou77uOb7FM2WPhwT7smM833PzanhJLsgXjN89Ir6V2PczXNnMpwKhw==}
@@ -1046,10 +1062,12 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@paperclipai/plugin-sdk@2026.427.0':
+  '@paperclipai/plugin-sdk@2026.427.0(react@19.2.5)':
     dependencies:
       '@paperclipai/shared': 2026.427.0
       zod: 3.25.76
+    optionalDependencies:
+      react: 19.2.5
 
   '@paperclipai/shared@2026.427.0':
     dependencies:
@@ -1170,6 +1188,10 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/react@19.2.14':
+    dependencies:
+      csstype: 3.2.3
+
   '@types/resolve@1.20.2': {}
 
   '@vitest/expect@3.2.4':
@@ -1264,6 +1286,8 @@ snapshots:
       delayed-stream: 1.0.0
 
   core-util-is@1.0.2: {}
+
+  csstype@3.2.3: {}
 
   dashdash@1.14.1:
     dependencies:
@@ -1475,6 +1499,8 @@ snapshots:
   punycode@2.3.1: {}
 
   qs@6.5.5: {}
+
+  react@19.2.5: {}
 
   request@2.88.2:
     dependencies:

@@ -65,6 +65,32 @@ function leaseMetadata(input: {
 const plugin = definePlugin({
   async setup(ctx) {
     ctx.logger.info("Kubernetes sandbox provider plugin ready");
+
+    // Inventory feed for the settings page UI slot. Lists plugin-owned lease
+    // pods + PVCs in the worker's own namespace (in-cluster) scoped to the
+    // requesting company. Returns an empty inventory with an error string when
+    // not running in-cluster or when the K8s API rejects the listing.
+    ctx.data.register("inventory", async (params) => {
+      const companyId = typeof params.companyId === "string" ? params.companyId : "";
+      if (!companyId) {
+        return { namespace: null, pods: [], pvcs: [], error: "missing companyId" };
+      }
+      try {
+        const config = parseDriverConfig({});
+        const client = buildClient(config);
+        const [pods, pvcs] = await Promise.all([
+          listManagedPods(client, config.namespace, companyId),
+          listManagedPvcs(client, config.namespace, companyId),
+        ]);
+        return {
+          namespace: config.namespace,
+          pods: pods.map((pod) => ({ id: pod.name, ...pod })),
+          pvcs: pvcs.map((pvc) => ({ id: pvc.name, ...pvc })),
+        };
+      } catch (error) {
+        return { namespace: null, pods: [], pvcs: [], error: k8sErrorMessage(error) };
+      }
+    });
   },
 
   async onHealth() {

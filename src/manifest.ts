@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.2.0";
+const PLUGIN_VERSION = "0.3.0";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -15,6 +15,17 @@ const manifest: PaperclipPluginManifestV1 = {
   capabilities: ["environment.drivers.register"],
   entrypoints: {
     worker: "./dist/worker.js",
+    ui: "./dist/ui/index.js",
+  },
+  ui: {
+    slots: [
+      {
+        type: "settingsPage",
+        id: "inventory",
+        displayName: "Inventory",
+        exportName: "SettingsPage",
+      },
+    ],
   },
   environmentDrivers: [
     {
