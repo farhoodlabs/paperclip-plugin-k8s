@@ -61,7 +61,8 @@ describe("parseDriverConfig", () => {
     const cfg = parseDriverConfig({ image: "node:20" });
     expect(cfg.image).toBe("node:20");
     expect(cfg.namespace).toBe("default");
-    expect(cfg.workspaceMountPath).toBe("/workspace");
+    expect(cfg.workspace.mountPath).toBe("/workspace");
+    expect(cfg.workspace.pvc.name).toBeNull();
     expect(cfg.reuseLease).toBe(false);
     expect(cfg.podReadyTimeoutMs).toBe(120_000);
     expect(cfg.timeoutMs).toBe(300_000);
@@ -78,8 +79,10 @@ describe("parseDriverConfig", () => {
       namespace: "prod",
       kubeconfigPath: "/etc/k8s/config",
       serviceAccountName: "sa-{companyId}",
-      workspaceMountPath: "/work",
-      pvcName: "my-pvc",
+      workspace: {
+        mountPath: "/work",
+        pvc: { name: "my-pvc", create: true, storageClass: "fast", size: "20Gi" },
+      },
       reuseLease: true,
       podReadyTimeoutMs: 60_000,
       timeoutMs: 90_000,
@@ -88,8 +91,11 @@ describe("parseDriverConfig", () => {
     expect(cfg.namespace).toBe("prod");
     expect(cfg.kubeconfigPath).toBe("/etc/k8s/config");
     expect(cfg.serviceAccountName).toBe("sa-{companyId}");
-    expect(cfg.workspaceMountPath).toBe("/work");
-    expect(cfg.pvcName).toBe("my-pvc");
+    expect(cfg.workspace.mountPath).toBe("/work");
+    expect(cfg.workspace.pvc.name).toBe("my-pvc");
+    expect(cfg.workspace.pvc.create).toBe(true);
+    expect(cfg.workspace.pvc.storageClass).toBe("fast");
+    expect(cfg.workspace.pvc.size).toBe("20Gi");
     expect(cfg.reuseLease).toBe(true);
     expect(cfg.podReadyTimeoutMs).toBe(60_000);
     expect(cfg.timeoutMs).toBe(90_000);
@@ -128,14 +134,21 @@ describe("buildPodManifest", () => {
     expect(pod.spec?.restartPolicy).toBe("Never");
   });
 
-  it("mounts PVC when pvcName is set", () => {
-    const cfg = parseDriverConfig({ image: "alpine", pvcName: "ws-pvc" });
+  it("mounts PVC when workspace.pvc.name is set", () => {
+    const cfg = parseDriverConfig({ image: "alpine", workspace: { pvc: { name: "ws-pvc" } } });
     const pod = buildPodManifest(cfg, "l1", "c1");
     const vol = pod.spec?.volumes?.find((v) => v.name === "workspace");
     expect(vol?.persistentVolumeClaim?.claimName).toBe("ws-pvc");
   });
 
-  it("uses emptyDir when no pvcName", () => {
+  it("accepts legacy top-level pvcName for backward compat", () => {
+    const cfg = parseDriverConfig({ image: "alpine", pvcName: "legacy-pvc" });
+    const pod = buildPodManifest(cfg, "l1", "c1");
+    const vol = pod.spec?.volumes?.find((v) => v.name === "workspace");
+    expect(vol?.persistentVolumeClaim?.claimName).toBe("legacy-pvc");
+  });
+
+  it("uses emptyDir when no PVC name", () => {
     const cfg = parseDriverConfig({ image: "alpine" });
     const pod = buildPodManifest(cfg, "l1", "c1");
     const vol = pod.spec?.volumes?.find((v) => v.name === "workspace");
@@ -211,13 +224,13 @@ describe("onEnvironmentRealizeWorkspace", () => {
     expect(result.cwd).toBe("/workspace");
   });
 
-  it("falls back to workspaceMountPath from config", async () => {
-    const harness = makeHarness({ image: "alpine", workspaceMountPath: "/custom" });
+  it("falls back to workspace.mountPath from config", async () => {
+    const harness = makeHarness({ image: "alpine", workspace: { mountPath: "/custom" } });
     const result = await harness.realizeWorkspace({
       driverKey: "k8s",
       companyId: "c1",
       environmentId: "env-1",
-      config: { image: "alpine", workspaceMountPath: "/custom" },
+      config: { image: "alpine", workspace: { mountPath: "/custom" } },
       lease: { providerLeaseId: "l123" },
       workspace: {},
     });

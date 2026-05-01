@@ -6,8 +6,7 @@ export interface K8sDriverConfig {
   image: string;
   kubeconfigPath: string | null;
   serviceAccountName: string | null;
-  workspaceMountPath: string;
-  pvcName: string | null;
+  workspace: K8sWorkspaceConfig;
   reuseLease: boolean;
   podReadyTimeoutMs: number;
   timeoutMs: number;
@@ -16,6 +15,24 @@ export interface K8sDriverConfig {
   runAsGroup: number | null;
   fsGroup: number | null;
   resources: K8sResources | null;
+}
+
+export interface K8sWorkspaceConfig {
+  mountPath: string;
+  pvc: K8sWorkspacePvcConfig;
+}
+
+export interface K8sWorkspacePvcConfig {
+  // Blank/null → ephemeral emptyDir (no persistence).
+  name: string | null;
+  // When true, the plugin creates the PVC during acquireLease if it doesn't
+  // exist. When false, the PVC must already exist or acquire fails.
+  create: boolean;
+  // Used only when creating a PVC. Blank → cluster's default StorageClass.
+  storageClass: string | null;
+  // Volume size for newly-created PVCs (k8s quantity string).
+  size: string;
+  accessMode: string;
 }
 
 export interface K8sResources {
@@ -55,6 +72,29 @@ function asStringMap(value: unknown): Record<string, string> {
   return out;
 }
 
+function parseWorkspaceConfig(raw: Record<string, unknown>): K8sWorkspaceConfig {
+  const workspace = (raw.workspace && typeof raw.workspace === "object" ? raw.workspace : {}) as Record<string, unknown>;
+  const pvc = (workspace.pvc && typeof workspace.pvc === "object" ? workspace.pvc : {}) as Record<string, unknown>;
+
+  // Backward compat: accept legacy top-level workspaceMountPath / pvcName.
+  const mountPath =
+    asTrimmedString(workspace.mountPath) ??
+    asTrimmedString(raw.workspaceMountPath) ??
+    "/workspace";
+  const name = asTrimmedString(pvc.name) ?? asTrimmedString(raw.pvcName);
+
+  return {
+    mountPath,
+    pvc: {
+      name,
+      create: pvc.create === true,
+      storageClass: asTrimmedString(pvc.storageClass),
+      size: asTrimmedString(pvc.size) ?? "10Gi",
+      accessMode: asTrimmedString(pvc.accessMode) ?? "ReadWriteOnce",
+    },
+  };
+}
+
 function asResources(value: unknown): K8sResources | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -78,8 +118,7 @@ export function parseDriverConfig(raw: Record<string, unknown>): K8sDriverConfig
     image: asTrimmedString(raw.image) ?? "",
     kubeconfigPath: asTrimmedString(raw.kubeconfigPath),
     serviceAccountName: asTrimmedString(raw.serviceAccountName),
-    workspaceMountPath: asTrimmedString(raw.workspaceMountPath) ?? "/workspace",
-    pvcName: asTrimmedString(raw.pvcName),
+    workspace: parseWorkspaceConfig(raw),
     reuseLease: raw.reuseLease === true,
     podReadyTimeoutMs: asPositiveInt(raw.podReadyTimeoutMs, 120_000),
     timeoutMs: asPositiveInt(raw.timeoutMs, 300_000),

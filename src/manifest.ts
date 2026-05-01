@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.1.29";
+const PLUGIN_VERSION = "0.2.0";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -47,15 +47,53 @@ const manifest: PaperclipPluginManifestV1 = {
           },
 
           // --- Workspace ---
-          workspaceMountPath: {
-            type: "string",
-            description: "Path inside the pod where the workspace volume is mounted.",
-            default: "/workspace",
-          },
-          pvcName: {
-            type: "string",
-            title: "Workspace PVC Name",
-            description: "Existing PVC name to mount at the workspace path. If omitted, the workspace is ephemeral.",
+          workspace: {
+            type: "object",
+            title: "Workspace",
+            description: "Where the agent's working directory lives inside the lease pod, and the PVC (if any) that backs it.",
+            properties: {
+              mountPath: {
+                type: "string",
+                title: "Mount Path",
+                default: "/workspace",
+                description: "Path inside the pod where the workspace volume is mounted.",
+              },
+              pvc: {
+                type: "object",
+                title: "Persistent Volume Claim",
+                description: "Optional PVC backing the workspace. Leave name blank for an ephemeral emptyDir workspace.",
+                properties: {
+                  name: {
+                    type: "string",
+                    title: "PVC Name",
+                    description: "Name of the PVC to mount at the mount path. Leave blank for an ephemeral emptyDir workspace (lost when the pod terminates).",
+                  },
+                  create: {
+                    type: "boolean",
+                    title: "Create if Missing",
+                    default: false,
+                    description: "When set, the plugin creates the PVC during acquireLease if it doesn't already exist (using the storage class, size, and access mode below). When false, the PVC must already exist or acquire fails. Plugin-created PVCs are not auto-deleted when the lease ends.",
+                  },
+                  storageClass: {
+                    type: "string",
+                    title: "Storage Class",
+                    description: "StorageClass name for newly-created PVCs. Leave blank to use the cluster's default StorageClass.",
+                  },
+                  size: {
+                    type: "string",
+                    title: "Size",
+                    default: "10Gi",
+                    description: "Volume size for newly-created PVCs (Kubernetes quantity, e.g. \"10Gi\", \"50Gi\").",
+                  },
+                  accessMode: {
+                    type: "string",
+                    title: "Access Mode",
+                    default: "ReadWriteOnce",
+                    description: "Access mode for newly-created PVCs. Most cloud providers only support ReadWriteOnce.",
+                  },
+                },
+              },
+            },
           },
 
           // --- Security context (UID/GID/fsGroup) ---

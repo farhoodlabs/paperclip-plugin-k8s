@@ -21,6 +21,8 @@ import {
   createLeasePod,
   deleteLeasePod,
   getLeasePod,
+  listManagedPods,
+  listManagedPvcs,
   podName,
   waitPodReady,
 } from "./k8s/pod.js";
@@ -90,10 +92,27 @@ const plugin = definePlugin({
       const client = buildClient(config);
       await client.core.readNamespace(config.namespace);
       const image = config.image || (await resolveSelfImage(client)) || null;
+      // Surface plugin-owned pods and PVCs in this namespace so users can see
+      // what the plugin has provisioned. We don't fail the probe if either
+      // listing errors (could be RBAC) — just omit the field.
+      const [managedPods, managedPvcs] = await Promise.all([
+        listManagedPods(client, config.namespace, params.companyId).catch(() => undefined),
+        listManagedPvcs(client, config.namespace, params.companyId).catch(() => undefined),
+      ]);
+      const parts: string[] = [];
+      if (managedPods) parts.push(`${managedPods.length} pod${managedPods.length === 1 ? "" : "s"}`);
+      if (managedPvcs) parts.push(`${managedPvcs.length} PVC${managedPvcs.length === 1 ? "" : "s"}`);
+      const inventorySummary = parts.length > 0 ? `, ${parts.join(" + ")} owned by plugin` : "";
       return {
         ok: true,
-        summary: `Connected to namespace ${config.namespace}.`,
-        metadata: { provider: "k8s", namespace: config.namespace, image },
+        summary: `Connected to namespace ${config.namespace}${inventorySummary}.`,
+        metadata: {
+          provider: "k8s",
+          namespace: config.namespace,
+          image,
+          ...(managedPods ? { managedPods } : {}),
+          ...(managedPvcs ? { managedPvcs } : {}),
+        },
       };
     } catch (error) {
       return {
@@ -124,7 +143,7 @@ const plugin = definePlugin({
       metadata: leaseMetadata({
         leaseId,
         namespace: config.namespace,
-        workspaceMountPath: config.workspaceMountPath,
+        workspaceMountPath: config.workspace.mountPath,
         reuseLease: config.reuseLease,
         resumedLease: false,
         paperclipApiUrl: config.env.PAPERCLIP_API_URL ?? null,
@@ -146,7 +165,7 @@ const plugin = definePlugin({
       metadata: leaseMetadata({
         leaseId: params.providerLeaseId,
         namespace: config.namespace,
-        workspaceMountPath: config.workspaceMountPath,
+        workspaceMountPath: config.workspace.mountPath,
         reuseLease: config.reuseLease,
         resumedLease: true,
         paperclipApiUrl: config.env.PAPERCLIP_API_URL ?? null,
@@ -180,7 +199,7 @@ const plugin = definePlugin({
     const cwd =
       typeof params.lease.metadata?.remoteCwd === "string"
         ? params.lease.metadata.remoteCwd
-        : config.workspaceMountPath;
+        : config.workspace.mountPath;
     // TODO: optionally rsync params.workspace into the pod (kubectl cp / tar over exec).
     // For PVC-backed leases this is typically a no-op since the volume persists.
     return {
