@@ -52,12 +52,7 @@ function leaseMetadata(input: {
   workspaceMountPath: string;
   reuseLease: boolean;
   resumedLease: boolean;
-  paperclipApiUrl: string | null;
 }) {
-  // The host's environment-execution-target reads lease.metadata.paperclipApiUrl
-  // → AdapterSandboxExecutionTarget.paperclipApiUrl. When set, the host derives
-  // paperclipTransport: "direct" from its presence (env-target.ts:73 hardcodes
-  // this). When null, the host falls back to the queue-based callback bridge.
   return {
     provider: "k8s",
     leaseId: input.leaseId,
@@ -66,7 +61,6 @@ function leaseMetadata(input: {
     remoteCwd: input.workspaceMountPath,
     reuseLease: input.reuseLease,
     resumedLease: input.resumedLease,
-    ...(input.paperclipApiUrl ? { paperclipApiUrl: input.paperclipApiUrl } : {}),
   };
 }
 
@@ -213,7 +207,6 @@ const plugin = definePlugin({
         workspaceMountPath: config.workspace.mountPath,
         reuseLease: config.reuseLease,
         resumedLease: false,
-        paperclipApiUrl: config.env.PAPERCLIP_API_URL ?? null,
       }),
     };
   },
@@ -237,7 +230,6 @@ const plugin = definePlugin({
         workspaceMountPath: config.workspace.mountPath,
         reuseLease: config.reuseLease,
         resumedLease: true,
-        paperclipApiUrl: config.env.PAPERCLIP_API_URL ?? null,
       }),
     };
   },

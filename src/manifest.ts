@@ -1,7 +1,7 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const PLUGIN_ID = "farhoodlabs.k8s-sandbox-provider";
-const PLUGIN_VERSION = "0.3.5";
+const PLUGIN_VERSION = "0.3.6";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: PLUGIN_ID,
@@ -31,7 +31,7 @@ const manifest: PaperclipPluginManifestV1 = {
     {
       driverKey: "k8s",
       kind: "sandbox_provider",
-      displayName: "Kubernetes Pod",
+      displayName: "Kubernetes",
       description:
         "Runs each environment lease as a long-lived pod, with optional PVC-backed workspace and lease reuse across runs.",
       configSchema: {
@@ -184,13 +184,6 @@ const manifest: PaperclipPluginManifestV1 = {
           env: {
             type: "object",
             description: "Environment variables to set on the pod container.",
-            properties: {
-              PAPERCLIP_API_URL: {
-                type: "string",
-                title: "PAPERCLIP_API_URL",
-                description: "URL the agent inside the lease pod uses to reach the host Paperclip API (e.g. https://your-host or http://paperclip.<ns>.svc.cluster.local:3100). Setting this enables direct mode: the host routes the agent's API calls straight to this URL via a single HTTP hop instead of through the queue-based in-pod callback bridge. Leave blank to use bridge mode.",
-              },
-            },
             additionalProperties: { type: "string" },
           },
         },
