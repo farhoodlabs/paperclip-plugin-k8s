@@ -18,6 +18,30 @@ import type {
 import { parseDriverConfig, type K8sDriverConfig } from "./config.js";
 import { buildClient, k8sErrorMessage, type K8sClient } from "./k8s/client.js";
 
+// Local type augmentation: the host adds `agentId` to acquire/resume params
+// so plugins can scope lease state per-agent. The published SDK type may not
+// yet expose this field; we read it defensively here so the plugin compiles
+// against any SDK version. When the host doesn't send the field (older host
+// or ad-hoc test probe), `agentId` is undefined and the plugin falls back to
+// the bare workspace mount path with no per-agent subdir.
+function readAgentId(
+  params: Pick<PluginEnvironmentAcquireLeaseParams | PluginEnvironmentResumeLeaseParams, "config">,
+): string | undefined {
+  const raw = (params as { agentId?: unknown }).agentId;
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+// Append /<agentId> to the configured workspace mountPath when the host
+// supplies an agentId. Returns the bare mountPath when it doesn't. The
+// returned path is what gets stored as lease.metadata.remoteCwd, which the
+// host adapter uses as both the workspace upload destination and the agent
+// CLI's cwd inside the pod.
+function resolveRemoteCwd(mountPath: string, agentId: string | undefined): string {
+  if (!agentId) return mountPath;
+  const trimmed = mountPath.endsWith("/") ? mountPath.slice(0, -1) : mountPath;
+  return `${trimmed}/${agentId}`;
+}
+
 // Set in setup(); used by debug() so call sites don't need to thread ctx.
 let pluginLogger: { info: (msg: string, data?: Record<string, unknown>) => void } | null = null;
 
@@ -52,6 +76,7 @@ function leaseMetadata(input: {
   workspaceMountPath: string;
   reuseLease: boolean;
   resumedLease: boolean;
+  agentId?: string;
 }) {
   return {
     provider: "k8s",
@@ -61,6 +86,7 @@ function leaseMetadata(input: {
     remoteCwd: input.workspaceMountPath,
     reuseLease: input.reuseLease,
     resumedLease: input.resumedLease,
+    ...(input.agentId ? { agentId: input.agentId } : {}),
   };
 }
 
@@ -179,10 +205,13 @@ const plugin = definePlugin({
     const client = buildClient(parsed);
     const config: K8sDriverConfig = { ...parsed, image: await resolveImage(parsed, client) };
     const leaseId = cryptoRandomLeaseId();
+    const agentId = readAgentId(params);
+    const remoteCwd = resolveRemoteCwd(config.workspace.mountPath, agentId);
     debug(config, "acquireLease", {
       leaseId,
       companyId: params.companyId,
       environmentId: params.environmentId,
+      agentId: agentId ?? null,
       namespace: config.namespace,
       image: config.image,
       pvcName: config.workspace.pvc.name,
@@ -190,6 +219,7 @@ const plugin = definePlugin({
       reuseLease: config.reuseLease,
       timeoutMs: config.timeoutMs,
       podReadyTimeoutMs: config.podReadyTimeoutMs,
+      remoteCwd,
     });
 
     try {
@@ -204,9 +234,10 @@ const plugin = definePlugin({
       metadata: leaseMetadata({
         leaseId,
         namespace: config.namespace,
-        workspaceMountPath: config.workspace.mountPath,
+        workspaceMountPath: remoteCwd,
         reuseLease: config.reuseLease,
         resumedLease: false,
+        agentId,
       }),
     };
   },
@@ -215,21 +246,36 @@ const plugin = definePlugin({
     params: PluginEnvironmentResumeLeaseParams,
   ): Promise<PluginEnvironmentLease> {
     const config = parseDriverConfig(params.config);
-    debug(config, "resumeLease", { providerLeaseId: params.providerLeaseId, namespace: config.namespace });
+    const currentAgentId = readAgentId(params);
+    debug(config, "resumeLease", {
+      providerLeaseId: params.providerLeaseId,
+      namespace: config.namespace,
+      currentAgentId: currentAgentId ?? null,
+    });
+
     const client = buildClient(config);
     const pod = await getLeasePod(client, config, params.providerLeaseId);
     if (!pod) {
       debug(config, "resumeLease.expired", { providerLeaseId: params.providerLeaseId });
       return { providerLeaseId: null, metadata: { expired: true } };
     }
+
+    // Pods are shared across agents under reuseLease=true. Each run gets its
+    // own subdir under workspace.mountPath, so the resume just rewrites
+    // remoteCwd to the *current* run's agent subdir. No matching against the
+    // lease's previously-stored agentId — that would block multiple agents
+    // from sharing the pod, which is exactly the shared-infra arrangement
+    // this resume path is designed for.
+    const remoteCwd = resolveRemoteCwd(config.workspace.mountPath, currentAgentId);
     return {
       providerLeaseId: params.providerLeaseId,
       metadata: leaseMetadata({
         leaseId: params.providerLeaseId,
         namespace: config.namespace,
-        workspaceMountPath: config.workspace.mountPath,
+        workspaceMountPath: remoteCwd,
         reuseLease: config.reuseLease,
         resumedLease: true,
+        agentId: currentAgentId,
       }),
     };
   },

@@ -258,6 +258,47 @@ describe("onEnvironmentAcquireLease", () => {
     expect(lease.metadata?.provider).toBe("k8s");
     expect(lease.metadata?.namespace).toBe("default");
   });
+
+  it("uses bare workspace mountPath when no agentId is provided (legacy host)", async () => {
+    const harness = makeHarness();
+    const lease = await harness.acquireLease({
+      driverKey: "k8s",
+      companyId: "c1",
+      environmentId: "env-1",
+      config: BASE_CONFIG,
+      runId: "run-1",
+    });
+    expect(lease.metadata?.remoteCwd).toBe("/workspace");
+    expect(lease.metadata?.agentId).toBeUndefined();
+  });
+
+  it("appends agentId subdir to mountPath when host provides agentId", async () => {
+    const harness = makeHarness();
+    const lease = await harness.acquireLease({
+      driverKey: "k8s",
+      companyId: "c1",
+      environmentId: "env-1",
+      config: BASE_CONFIG,
+      runId: "run-1",
+      // agentId not in current SDK type but plugin reads it defensively
+      agentId: "agent-abc",
+    } as never);
+    expect(lease.metadata?.remoteCwd).toBe("/workspace/agent-abc");
+    expect(lease.metadata?.agentId).toBe("agent-abc");
+  });
+
+  it("handles mountPath with trailing slash without producing double-slash", async () => {
+    const harness = makeHarness();
+    const lease = await harness.acquireLease({
+      driverKey: "k8s",
+      companyId: "c1",
+      environmentId: "env-1",
+      config: { ...BASE_CONFIG, workspace: { mountPath: "/workspace/" } },
+      runId: "run-1",
+      agentId: "agent-abc",
+    } as never);
+    expect(lease.metadata?.remoteCwd).toBe("/workspace/agent-abc");
+  });
 });
 
 describe("onEnvironmentResumeLease", () => {
@@ -289,6 +330,38 @@ describe("onEnvironmentResumeLease", () => {
     });
     expect(lease.providerLeaseId).toBeNull();
     expect(lease.metadata?.expired).toBe(true);
+  });
+
+  it("rewrites remoteCwd to current agent's subdir on resume — agents share pods", async () => {
+    vi.mocked(getLeasePod).mockResolvedValueOnce({ metadata: { name: "test-pod" } } as never);
+    const harness = makeHarness();
+    const lease = await harness.resumeLease({
+      driverKey: "k8s",
+      companyId: "c1",
+      environmentId: "env-1",
+      config: BASE_CONFIG,
+      providerLeaseId: "l-shared",
+      leaseMetadata: { remoteCwd: "/workspace/previous-agent", agentId: "previous-agent" },
+      agentId: "current-agent",
+    } as never);
+    // Resume succeeds (shared pod), but remoteCwd reflects the current run's agent
+    expect(lease.providerLeaseId).toBe("l-shared");
+    expect(lease.metadata?.remoteCwd).toBe("/workspace/current-agent");
+    expect(lease.metadata?.agentId).toBe("current-agent");
+  });
+
+  it("falls back to bare mountPath on resume when host doesn't provide agentId", async () => {
+    vi.mocked(getLeasePod).mockResolvedValueOnce({ metadata: { name: "test-pod" } } as never);
+    const harness = makeHarness();
+    const lease = await harness.resumeLease({
+      driverKey: "k8s",
+      companyId: "c1",
+      environmentId: "env-1",
+      config: BASE_CONFIG,
+      providerLeaseId: "l-legacy",
+    });
+    expect(lease.providerLeaseId).toBe("l-legacy");
+    expect(lease.metadata?.remoteCwd).toBe("/workspace");
   });
 });
 
